@@ -251,7 +251,7 @@ export default function RecipientsManagement() {
                   Add Recipient
                 </Button>
               </DialogTrigger>
-            <DialogContent aria-describedby="add-recipient-description">
+              <DialogContent aria-describedby="add-recipient-description">
               <DialogHeader>
                 <DialogTitle>Add New Recipient</DialogTitle>
               </DialogHeader>
