@@ -317,8 +317,6 @@ export default function RecipientsManagement() {
             </DialogContent>
           </Dialog>
         </div>
-
-        
       </div>
 
       {/* Recipients List */}
