@@ -17,46 +17,10 @@ export async function initializeDatabase() {
 
     console.log("Table counts - Hosts:", hostsCount.count, "Projects:", projectsCount.count, "Messages:", messagesCount.count, "Collections:", collectionsCount.count, "Recipients:", recipientsCount.count);
 
-    // Only seed if ALL tables are completely empty (first time setup)
-    if (hostsCount.count === 0 && projectsCount.count === 0 && messagesCount.count === 0 && collectionsCount.count === 0) {
-      console.log("Seeding hosts table...");
-      await db.insert(hosts).values([
-        {
-          name: "Alex Thompson",
-          email: "alex.thompson@email.com", 
-          phone: "(555) 111-2222",
-          status: "active",
-          notes: "Regular Saturday collections"
-        },
-        {
-          name: "Maria Gonzalez",
-          email: "maria.gonzalez@email.com",
-          phone: "(555) 333-4444", 
-          status: "active",
-          notes: "Specializes in large group events"
-        },
-        {
-          name: "David Kim",
-          email: "david.kim@email.com",
-          phone: "(555) 555-6666",
-          status: "active", 
-          notes: "Weekday collections preferred"
-        },
-        {
-          name: "Rachel Williams",
-          email: "rachel.williams@email.com",
-          phone: "(555) 777-8888",
-          status: "active",
-          notes: "Available for emergency collections"
-        },
-        {
-          name: "James Anderson", 
-          email: "james.anderson@email.com",
-          phone: "(555) 999-0000",
-          status: "inactive",
-          notes: "On temporary leave"
-        }
-      ]);
+    // Don't seed hosts - they should be added manually or via import
+    // Only seed other tables if ALL are completely empty (first time setup)
+    if (projectsCount.count === 0 && messagesCount.count === 0 && collectionsCount.count === 0) {
+      console.log("Skipping hosts seeding - hosts should be added manually");
     }
 
     // Only seed collections if they're empty (no duplicate variable declaration needed)
