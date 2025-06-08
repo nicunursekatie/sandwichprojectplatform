@@ -24,6 +24,7 @@ export default function Dashboard() {
     { id: "meetings", label: "Meetings", icon: ClipboardList },
     { id: "files", label: "Files", icon: FolderOpen },
     { id: "documents", label: "Documents", icon: FileText },
+    { id: "toolkit", label: "Toolkit", icon: BarChart3 },
     { id: "reports", label: "Reports", icon: BarChart3 },
     { id: "collections", label: "Collection Log", icon: Sandwich },
     { id: "recipients", label: "Recipients", icon: Users },
@@ -46,6 +47,103 @@ export default function Dashboard() {
         return <GoogleDriveLinks />;
       case "documents":
         return <DocumentsBrowser />;
+      case "toolkit":
+        return (
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900/20 rounded-xl">
+                <BarChart3 className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Training Toolkit</h1>
+                <p className="text-gray-600 dark:text-gray-300">Essential training documents and resources</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                {
+                  title: "Food Safety Volunteers Guide",
+                  description: "Essential food safety guidelines for all volunteers",
+                  path: "/documents/20230525-TSP-Food Safety Volunteers.pdf",
+                  category: "Safety"
+                },
+                {
+                  title: "Deli Sandwich Making 101",
+                  description: "Step-by-step guide for preparing deli sandwiches",
+                  path: "/documents/20240622-TSP-Deli Sandwich Making 101.pdf",
+                  category: "Training"
+                },
+                {
+                  title: "PBJ Sandwich Making 101", 
+                  description: "Instructions for peanut butter and jelly sandwich preparation",
+                  path: "/documents/20250622-TSP-PBJ Sandwich Making 101.pdf",
+                  category: "Training"
+                },
+                {
+                  title: "Deli Labels",
+                  description: "Printable labels for deli sandwich packaging",
+                  path: "/documents/Deli labels.pdf",
+                  category: "Resources"
+                },
+                {
+                  title: "PBJ Labels",
+                  description: "Printable labels for PBJ sandwich packaging", 
+                  path: "/documents/Pbj labels.pdf",
+                  category: "Resources"
+                },
+                {
+                  title: "Sandwich Inventory List",
+                  description: "Current inventory tracking spreadsheet for 3 oz portions",
+                  path: "/documents/TSP Sandwich Inventory List for 3 ozs.xlsx",
+                  category: "Operations"
+                }
+              ].map((doc, index) => (
+                <div
+                  key={index}
+                  className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm p-6 hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <FileText className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{doc.title}</h3>
+                        <span className={`inline-block px-2 py-1 text-xs font-medium rounded-full ${
+                          doc.category === 'Safety' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300' :
+                          doc.category === 'Training' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' :
+                          doc.category === 'Resources' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' :
+                          'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
+                        }`}>
+                          {doc.category}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">{doc.description}</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const link = document.createElement('a');
+                        link.href = doc.path;
+                        link.download = doc.title;
+                        link.click();
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Download
+                    </button>
+                    <button
+                      onClick={() => window.open(doc.path, '_blank')}
+                      className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors"
+                    >
+                      View
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
       case "reports":
         return <WeeklySandwichForm />;
       case "collections":
