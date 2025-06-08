@@ -6,14 +6,14 @@ export async function initializeDatabase() {
   try {
     console.log("Checking database initialization...");
 
-    // Check if any core data exists - if any table has data, skip all seeding
+    // Check each table independently and seed if empty
     const [hostsCount] = await db.select({ count: count() }).from(hosts);
     const [projectsCount] = await db.select({ count: count() }).from(projects);
     const [messagesCount] = await db.select({ count: count() }).from(messages);
     const [collectionsCount] = await db.select({ count: count() }).from(sandwichCollections);
     
-    // Only seed if ALL tables are completely empty (first time setup)
-    if (hostsCount.count === 0 && projectsCount.count === 0 && messagesCount.count === 0 && collectionsCount.count === 0) {
+    // Seed hosts if hosts table is empty
+    if (hostsCount.count === 0) {
       console.log("Seeding hosts table...");
       await db.insert(hosts).values([
         {
@@ -54,7 +54,7 @@ export async function initializeDatabase() {
       ]);
     }
 
-    // Only seed collections if they're empty (no duplicate variable declaration needed)
+    // Seed collections if collections table is empty
     if (collectionsCount.count === 0) {
       console.log("Seeding sandwich collections table...");
       await db.insert(sandwichCollections).values([
