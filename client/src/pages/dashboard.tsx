@@ -24,10 +24,6 @@ export default function Dashboard() {
     { id: "meetings", label: "Meetings", icon: ClipboardList },
     { id: "files", label: "Files", icon: FolderOpen },
     { id: "documents", label: "Documents", icon: FileText },
-    { id: "toolkit", label: "Toolkit", icon: BarChart3 },
-  ];
-
-  const toolkitItems = [
     { id: "reports", label: "Reports", icon: BarChart3 },
     { id: "collections", label: "Collection Log", icon: Sandwich },
     { id: "recipients", label: "Recipients", icon: Users },
@@ -50,34 +46,6 @@ export default function Dashboard() {
         return <GoogleDriveLinks />;
       case "documents":
         return <DocumentsBrowser />;
-      case "toolkit":
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {toolkitItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => setActiveSection(item.id)}
-                  className="bg-white rounded-lg border border-slate-200 shadow-sm p-6 cursor-pointer hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-center space-x-3 mb-3">
-                    <Icon className="w-8 h-8 text-blue-600" />
-                    <h3 className="text-lg font-semibold text-slate-900">{item.label}</h3>
-                  </div>
-                  <p className="text-sm text-slate-600">
-                    {item.id === "reports" && "Generate weekly sandwich reports"}
-                    {item.id === "collections" && "View sandwich collection history"}
-                    {item.id === "recipients" && "Manage donation recipients"}
-                    {item.id === "drivers" && "Manage delivery drivers"}
-                    {item.id === "hosts" && "Manage collection hosts"}
-                    {item.id === "development" && "Development tools and settings"}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        );
       case "reports":
         return <WeeklySandwichForm />;
       case "collections":
@@ -147,7 +115,7 @@ export default function Dashboard() {
         {/* Top Header */}
         <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center">
           <h2 className="text-xl font-semibold text-slate-900 capitalize">
-            {[...sidebarItems, ...toolkitItems].find(item => item.id === activeSection)?.label}
+            {sidebarItems.find(item => item.id === activeSection)?.label}
           </h2>
           <button
             onClick={() => window.location.href = '/api/logout'}
