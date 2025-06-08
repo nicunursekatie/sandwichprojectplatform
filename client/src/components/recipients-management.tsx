@@ -449,6 +449,6 @@ export default function RecipientsManagement() {
           </DialogContent>
         </Dialog>
       )}
-    </div>
+    </>
   );
 }
