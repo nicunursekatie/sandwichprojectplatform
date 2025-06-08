@@ -144,7 +144,7 @@ export async function initializeDatabase() {
         },
         {
           name: "Hope Atlanta",
-          phone: null,
+          phone: "404-000-0000",
           email: "aolvey@hopeatlanta.org",
           address: "Midtown (Ponce/Boulevard)",
           preferences: null,
@@ -152,7 +152,7 @@ export async function initializeDatabase() {
         },
         {
           name: "Intown Cares",
-          phone: null,
+          phone: "404-000-0001", 
           email: "Laura.DeGroot@intowncares.org",
           address: "Midtown (Ponce/Boulevard)",
           preferences: null,
@@ -184,7 +184,7 @@ export async function initializeDatabase() {
         },
         {
           name: "St. Vincent de Paul (Outreach Program)",
-          phone: null,
+          phone: "404-000-0002",
           email: "aseeley@svdpgeorgia.org",
           address: "Chamblee",
           preferences: "deli (will take pbj), Weekly Estimate: 500+",
@@ -240,7 +240,7 @@ export async function initializeDatabase() {
         },
         {
           name: "Eye Believe Foundation",
-          phone: null,
+          phone: "404-000-0003",
           email: null,
           address: null,
           preferences: "any, Weekly Estimate: 1000-3000",
