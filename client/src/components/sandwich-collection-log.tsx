@@ -1226,8 +1226,6 @@ export default function SandwichCollectionLog() {
           </div>
         </DialogContent>
       </Dialog>
-      </div>
-      </div>
     </div>
   );
 }
