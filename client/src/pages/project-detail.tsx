@@ -159,7 +159,11 @@ export default function ProjectDetail() {
 
   const handleAddTask = () => {
     if (!newTask.title.trim()) return;
-    addTaskMutation.mutate(newTask);
+    addTaskMutation.mutate({
+      ...newTask,
+      projectId: parseInt(id!),
+      status: "pending"
+    });
   };
 
   const handleAddComment = () => {
@@ -286,50 +290,50 @@ export default function ProjectDetail() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" onClick={() => setLocation("/projects")}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <Button variant="outline" onClick={() => setLocation("/projects")} className="self-start">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Projects
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white break-words">
                 {editingProject ? (
                   <Input
                     value={projectForm.title}
                     onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })}
-                    className="text-3xl font-bold"
+                    className="text-xl sm:text-2xl font-bold"
                   />
                 ) : (
                   project.title
                 )}
               </h1>
-              <div className="flex items-center gap-2 mt-2">
-                <Badge className={`${getStatusColor(project.status || "active")} text-white`}>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <Badge className={`${getStatusColor(project.status || "active")} text-white text-xs`}>
                   {project.status?.replace("_", " ") || "Active"}
                 </Badge>
-                <Badge className={`${getPriorityColor(project.priority || "medium")} text-white`}>
+                <Badge className={`${getPriorityColor(project.priority || "medium")} text-white text-xs`}>
                   {project.priority || "Medium"} Priority
                 </Badge>
-                <Badge variant="outline">
-                  {completedTasks}/{totalTasks} Tasks Complete ({progressPercentage}%)
+                <Badge variant="outline" className="text-xs">
+                  {completedTasks}/{totalTasks} Tasks ({progressPercentage}%)
                 </Badge>
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-auto">
             {editingProject ? (
               <>
-                <Button onClick={handleProjectSave} disabled={updateProjectMutation.isPending}>
-                  Save Changes
+                <Button onClick={handleProjectSave} disabled={updateProjectMutation.isPending} size="sm">
+                  Save
                 </Button>
-                <Button variant="outline" onClick={() => setEditingProject(false)}>
+                <Button variant="outline" onClick={() => setEditingProject(false)} size="sm">
                   Cancel
                 </Button>
               </>
             ) : (
-              <Button onClick={() => setEditingProject(true)}>
+              <Button onClick={() => setEditingProject(true)} size="sm">
                 Edit Project
               </Button>
             )}
@@ -386,18 +390,18 @@ export default function ProjectDetail() {
               <p className="text-gray-600 dark:text-gray-400 mb-4">
                 {project.description || "No description provided"}
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div>
                   <span className="text-sm font-medium text-gray-500">Category</span>
-                  <p className="text-lg">{project.category || "Uncategorized"}</p>
+                  <p className="text-base sm:text-lg break-words">{project.category || "Uncategorized"}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium text-gray-500">Created</span>
-                  <p className="text-lg">{new Date(project.createdAt || "").toLocaleDateString()}</p>
+                  <p className="text-base sm:text-lg">{new Date(project.createdAt || "").toLocaleDateString()}</p>
                 </div>
                 <div>
                   <span className="text-sm font-medium text-gray-500">Last Updated</span>
-                  <p className="text-lg">{new Date(project.updatedAt || "").toLocaleDateString()}</p>
+                  <p className="text-base sm:text-lg">{new Date(project.updatedAt || "").toLocaleDateString()}</p>
                 </div>
               </div>
             </CardContent>
@@ -406,22 +410,26 @@ export default function ProjectDetail() {
 
         {/* Tabs */}
         <Tabs defaultValue="tasks" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="tasks" className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4" />
-              Tasks
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
+            <TabsTrigger value="tasks" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <CheckCircle2 className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Tasks</span>
+              <span className="sm:hidden">Tasks</span>
             </TabsTrigger>
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Details
+            <TabsTrigger value="details" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Details</span>
+              <span className="sm:hidden">Info</span>
             </TabsTrigger>
-            <TabsTrigger value="comments" className="flex items-center gap-2">
-              <MessageSquare className="w-4 h-4" />
-              Comments
+            <TabsTrigger value="comments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <MessageSquare className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Comments</span>
+              <span className="sm:hidden">Chat</span>
             </TabsTrigger>
-            <TabsTrigger value="files" className="flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Files
+            <TabsTrigger value="files" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <FileText className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Files</span>
+              <span className="sm:hidden">Files</span>
             </TabsTrigger>
           </TabsList>
 
@@ -438,16 +446,18 @@ export default function ProjectDetail() {
                 {/* Add Task Form */}
                 <div className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800">
                   <h3 className="font-medium mb-3">Add New Task</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     <Input
                       placeholder="Task title"
                       value={newTask.title}
                       onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                      className="sm:col-span-2 lg:col-span-1"
                     />
                     <Input
                       placeholder="Description"
                       value={newTask.description}
                       onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                      className="sm:col-span-2 lg:col-span-1"
                     />
                     <Select
                       value={newTask.priority}
@@ -462,7 +472,11 @@ export default function ProjectDetail() {
                         <SelectItem value="high">High</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button onClick={handleAddTask} disabled={addTaskMutation.isPending || !newTask.title.trim()}>
+                    <Button 
+                      onClick={handleAddTask} 
+                      disabled={addTaskMutation.isPending || !newTask.title.trim()}
+                      className="w-full"
+                    >
                       Add Task
                     </Button>
                   </div>
@@ -585,7 +599,7 @@ export default function ProjectDetail() {
                           </div>
                           
                           {editingTask !== task.id && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 mt-2 sm:mt-0">
                               <input
                                 type="file"
                                 multiple
@@ -594,40 +608,42 @@ export default function ProjectDetail() {
                                 className="hidden"
                                 id={`file-upload-${task.id}`}
                               />
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => document.getElementById(`file-upload-${task.id}`)?.click()}
-                              >
-                                📎
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleTaskEdit(task)}
-                              >
-                                ✏️
-                              </Button>
-                              <Select
-                                value={task.status}
-                                onValueChange={(value) => handleTaskStatusChange(task.id, value)}
-                              >
-                                <SelectTrigger className="w-32">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pending">Pending</SelectItem>
-                                  <SelectItem value="in_progress">In Progress</SelectItem>
-                                  <SelectItem value="completed">Completed</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => deleteTaskMutation.mutate(task.id)}
-                              >
-                                🗑️
-                              </Button>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => document.getElementById(`file-upload-${task.id}`)?.click()}
+                                >
+                                  📎
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleTaskEdit(task)}
+                                >
+                                  ✏️
+                                </Button>
+                                <Select
+                                  value={task.status}
+                                  onValueChange={(value) => handleTaskStatusChange(task.id, value)}
+                                >
+                                  <SelectTrigger className="w-28 sm:w-32">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="in_progress">In Progress</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => deleteTaskMutation.mutate(task.id)}
+                                >
+                                  🗑️
+                                </Button>
+                              </div>
                             </div>
                           )}
                         </div>
