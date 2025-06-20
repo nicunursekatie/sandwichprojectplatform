@@ -44,11 +44,7 @@ export default function ProjectDetail() {
         requirements: project.requirements || "",
         deliverables: project.deliverables || "",
         resources: project.resources || "",
-        blockers: project.blockers || "",
-        budget: project.budget || "",
-        timeline: project.timeline || "",
-        stakeholders: project.stakeholders || "",
-        risks: project.risks || ""
+        blockers: project.blockers || ""
       });
     }
   }, [project]);
@@ -68,10 +64,13 @@ export default function ProjectDetail() {
   // Mutation to update project
   const updateProjectMutation = useMutation({
     mutationFn: async (updates: Partial<Project>) => {
-      return apiRequest(`/api/projects/${id}`, {
+      const response = await fetch(`/api/projects/${id}`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates)
       });
+      if (!response.ok) throw new Error('Update failed');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${id}`] });
@@ -85,11 +84,14 @@ export default function ProjectDetail() {
 
   // Mutation to add task
   const addTaskMutation = useMutation({
-    mutationFn: async (task: typeof newTask) => {
-      return apiRequest(`/api/projects/${id}/tasks`, {
+    mutationFn: async (task: { title: string; description: string; priority: string }) => {
+      const response = await fetch(`/api/projects/${id}/tasks`, {
         method: "POST",
-        body: JSON.stringify({ ...task, projectId: parseInt(id!) })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(task)
       });
+      if (!response.ok) throw new Error('Add task failed');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${id}/tasks`] });
@@ -104,10 +106,13 @@ export default function ProjectDetail() {
   // Mutation to update task
   const updateTaskMutation = useMutation({
     mutationFn: async ({ taskId, updates }: { taskId: number; updates: Partial<ProjectTask> }) => {
-      return apiRequest(`/api/projects/${id}/tasks/${taskId}`, {
+      const response = await fetch(`/api/projects/${id}/tasks/${taskId}`, {
         method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates)
       });
+      if (!response.ok) throw new Error('Update task failed');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${id}/tasks`] });
@@ -121,9 +126,11 @@ export default function ProjectDetail() {
   // Mutation to delete task
   const deleteTaskMutation = useMutation({
     mutationFn: async (taskId: number) => {
-      return apiRequest(`/api/projects/${id}/tasks/${taskId}`, {
+      const response = await fetch(`/api/projects/${id}/tasks/${taskId}`, {
         method: "DELETE"
       });
+      if (!response.ok) throw new Error('Delete task failed');
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${id}/tasks`] });
@@ -137,8 +144,9 @@ export default function ProjectDetail() {
   // Mutation to add comment
   const addCommentMutation = useMutation({
     mutationFn: async (comment: string) => {
-      return apiRequest(`/api/projects/${id}/comments`, {
+      const response = await fetch(`/api/projects/${id}/comments`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId: parseInt(id!),
           content: comment,
@@ -146,6 +154,8 @@ export default function ProjectDetail() {
           commentType: "general"
         })
       });
+      if (!response.ok) throw new Error('Add comment failed');
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/projects/${id}/comments`] });
@@ -160,9 +170,9 @@ export default function ProjectDetail() {
   const handleAddTask = () => {
     if (!newTask.title.trim()) return;
     addTaskMutation.mutate({
-      ...newTask,
-      projectId: parseInt(id!),
-      status: "pending"
+      title: newTask.title,
+      description: newTask.description,
+      priority: newTask.priority
     });
   };
 
@@ -376,7 +386,7 @@ export default function ProjectDetail() {
               <div>
                 <label className="block text-sm font-medium mb-2">Description</label>
                 <Textarea
-                  value={projectForm.description}
+                  value={projectForm.description || ""}
                   onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })}
                   placeholder="Project description"
                   rows={3}
