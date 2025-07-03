@@ -830,37 +830,179 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
           )}
         </TabsContent>
         
-        <TabsContent value="details" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Project Information</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-slate-700">Project Title</Label>
-                  <p className="text-slate-900">{project.title}</p>
+        <TabsContent value="details" className="space-y-6">
+          {/* Project Header Card */}
+          <Card className="border-0 bg-gradient-to-br from-slate-50 via-white to-blue-50 shadow-lg">
+            <CardHeader className="pb-6">
+              <div className="flex items-start justify-between">
+                <div className="space-y-2">
+                  <CardTitle className="text-2xl font-bold text-slate-900 leading-tight">
+                    {project.title}
+                  </CardTitle>
+                  <p className="text-base text-slate-600 leading-relaxed max-w-2xl">
+                    {project.description || 'No description provided for this project.'}
+                  </p>
                 </div>
-                <div>
-                  <Label className="text-sm font-medium text-slate-700">Category</Label>
-                  <p className="text-slate-900 capitalize">{project.category || 'General'}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-slate-700">Priority</Label>
-                  <Badge className={getPriorityColor(project.priority)}>
-                    {project.priority}
+                <div className="flex flex-col items-end space-y-3">
+                  <Badge 
+                    className={`${getPriorityColor(project.priority)} px-4 py-2 text-sm font-semibold shadow-sm`}
+                  >
+                    {project.priority.toUpperCase()} PRIORITY
                   </Badge>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-slate-700">Status</Label>
-                  <Badge variant="outline" className={getStatusColor(project.status)}>
+                  <Badge 
+                    variant="outline" 
+                    className={`${getStatusColor(project.status)} px-4 py-2 text-sm font-semibold border-2 shadow-sm`}
+                  >
                     {getStatusIcon(project.status)}
-                    <span className="ml-1 capitalize">{project.status.replace('_', ' ')}</span>
+                    <span className="ml-2 capitalize">{project.status.replace('_', ' ')}</span>
                   </Badge>
                 </div>
-                <div className="col-span-2">
-                  <Label className="text-sm font-medium text-slate-700">Description</Label>
-                  <p className="text-slate-900">{project.description}</p>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {/* Project Details Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Basic Information Card */}
+            <Card className="border-l-4 border-l-indigo-500 bg-gradient-to-br from-indigo-50 to-slate-50 hover:shadow-md transition-all duration-200">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-indigo-700 uppercase tracking-wider flex items-center">
+                    <Target className="w-4 h-4 mr-2" />
+                    Project Basics
+                  </CardTitle>
+                  <div className="p-2 bg-indigo-100 rounded-full">
+                    <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between py-2 border-b border-indigo-100">
+                    <span className="text-sm font-medium text-slate-600">Category</span>
+                    <Badge variant="secondary" className="bg-indigo-100 text-indigo-800 font-medium">
+                      {(project.category || 'General').charAt(0).toUpperCase() + (project.category || 'General').slice(1)}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-indigo-100">
+                    <span className="text-sm font-medium text-slate-600">Project ID</span>
+                    <span className="text-sm font-mono text-slate-800 bg-slate-100 px-2 py-1 rounded">
+                      #{project.id}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm font-medium text-slate-600">Created</span>
+                    <span className="text-sm text-slate-700">
+                      {project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-US', { 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      }) : 'Date not available'}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timeline & Budget Card */}
+            <Card className="border-l-4 border-l-emerald-500 bg-gradient-to-br from-emerald-50 to-slate-50 hover:shadow-md transition-all duration-200">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-bold text-emerald-700 uppercase tracking-wider flex items-center">
+                    <Clock className="w-4 h-4 mr-2" />
+                    Timeline & Resources
+                  </CardTitle>
+                  <div className="p-2 bg-emerald-100 rounded-full">
+                    <Calendar className="w-5 h-5 text-emerald-600" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between py-2 border-b border-emerald-100">
+                    <span className="text-sm font-medium text-slate-600">Est. Hours</span>
+                    <span className="text-lg font-bold text-emerald-700">
+                      {project.estimatedHours ? `${project.estimatedHours}h` : 'Not set'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-emerald-100">
+                    <span className="text-sm font-medium text-slate-600">Actual Hours</span>
+                    <span className="text-lg font-bold text-slate-700">
+                      {project.actualHours ? `${project.actualHours}h` : '0h'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm font-medium text-slate-600">Budget</span>
+                    <span className="text-lg font-bold text-emerald-700">
+                      {project.budget ? `$${project.budget}` : 'Not set'}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Progress & Performance Metrics */}
+          <Card className="border-l-4 border-l-purple-500 bg-gradient-to-br from-purple-50 to-slate-50">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-bold text-purple-700 flex items-center">
+                  <Award className="w-5 h-5 mr-3" />
+                  Performance Metrics
+                </CardTitle>
+                <div className="p-2 bg-purple-100 rounded-full">
+                  <Target className="w-6 h-6 text-purple-600" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="text-center space-y-2">
+                  <div className="text-3xl font-bold text-purple-600">{currentProgress}%</div>
+                  <div className="text-sm font-medium text-slate-600">Completion</div>
+                  <Progress value={currentProgress} className="h-2 bg-purple-100" />
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <div className="text-3xl font-bold text-blue-600">{projectTasks.length}</div>
+                  <div className="text-sm font-medium text-slate-600">Total Tasks</div>
+                  <div className="h-2 bg-blue-100 rounded-full">
+                    <div className="h-2 bg-blue-500 rounded-full" style={{ width: '100%' }}></div>
+                  </div>
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <div className="text-3xl font-bold text-green-600">
+                    {projectTasks.filter(task => task.status === 'completed').length}
+                  </div>
+                  <div className="text-sm font-medium text-slate-600">Completed</div>
+                  <div className="h-2 bg-green-100 rounded-full">
+                    <div 
+                      className="h-2 bg-green-500 rounded-full transition-all duration-300" 
+                      style={{ 
+                        width: `${projectTasks.length > 0 ? (projectTasks.filter(task => task.status === 'completed').length / projectTasks.length) * 100 : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                </div>
+                
+                <div className="text-center space-y-2">
+                  <div className="text-3xl font-bold text-orange-600">
+                    {projectTasks.length - projectTasks.filter(task => task.status === 'completed').length}
+                  </div>
+                  <div className="text-sm font-medium text-slate-600">Remaining</div>
+                  <div className="h-2 bg-orange-100 rounded-full">
+                    <div 
+                      className="h-2 bg-orange-500 rounded-full transition-all duration-300" 
+                      style={{ 
+                        width: `${projectTasks.length > 0 ? ((projectTasks.length - projectTasks.filter(task => task.status === 'completed').length) / projectTasks.length) * 100 : 0}%` 
+                      }}
+                    ></div>
+                  </div>
                 </div>
               </div>
             </CardContent>
