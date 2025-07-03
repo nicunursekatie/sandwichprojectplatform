@@ -385,46 +385,114 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
       </div>
 
       {/* Project Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-600">Assignee</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center">
-              <User className="w-4 h-4 mr-2 text-slate-400" />
-              <span className="text-slate-900">{project.assigneeName || 'Unassigned'}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-600">Due Date</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center">
-              <Calendar className="w-4 h-4 mr-2 text-slate-400" />
-              <span className="text-slate-900">
-                {project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'No due date set'}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-600">Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-600">Completion</span>
-                <span className="font-medium text-slate-900">{currentProgress}%</span>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Assignee Card */}
+        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-50 to-slate-50 hover:shadow-lg transition-all duration-200">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Project Owner</CardTitle>
+              <div className="p-2 bg-blue-100 rounded-full">
+                <User className="w-5 h-5 text-blue-600" />
               </div>
-              <Progress value={currentProgress} className="h-2" />
-              <div className="text-xs text-slate-500">
-                {projectTasks.filter(task => task.status === 'completed').length} of {projectTasks.length} tasks completed
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              <p className="text-2xl font-bold text-slate-900">
+                {project.assigneeName || 'Unassigned'}
+              </p>
+              {project.assigneeName ? (
+                <p className="text-sm text-slate-600">Currently managing this project</p>
+              ) : (
+                <p className="text-sm text-orange-600 font-medium">Needs assignment</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Due Date Card */}
+        <Card className="border-l-4 border-l-orange-500 bg-gradient-to-br from-orange-50 to-slate-50 hover:shadow-lg transition-all duration-200">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-semibold text-orange-600 uppercase tracking-wider">Target Date</CardTitle>
+              <div className="p-2 bg-orange-100 rounded-full">
+                <Calendar className="w-5 h-5 text-orange-600" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              {project.dueDate ? (
+                <>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {new Date(project.dueDate).toLocaleDateString('en-US', { 
+                      month: 'short', 
+                      day: 'numeric', 
+                      year: 'numeric' 
+                    })}
+                  </p>
+                  <p className="text-sm text-slate-600">
+                    {(() => {
+                      const today = new Date();
+                      const dueDate = new Date(project.dueDate);
+                      const diffTime = dueDate.getTime() - today.getTime();
+                      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                      
+                      if (diffDays < 0) {
+                        return `${Math.abs(diffDays)} days overdue`;
+                      } else if (diffDays === 0) {
+                        return 'Due today';
+                      } else if (diffDays === 1) {
+                        return 'Due tomorrow';
+                      } else {
+                        return `${diffDays} days remaining`;
+                      }
+                    })()}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-2xl font-bold text-slate-400">No due date</p>
+                  <p className="text-sm text-slate-500">Set a target completion date</p>
+                </>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Progress Card */}
+        <Card className="border-l-4 border-l-green-500 bg-gradient-to-br from-green-50 to-slate-50 hover:shadow-lg transition-all duration-200">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-semibold text-green-600 uppercase tracking-wider">Progress</CardTitle>
+              <div className="p-2 bg-green-100 rounded-full">
+                <Target className="w-5 h-5 text-green-600" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-3xl font-bold text-slate-900">{currentProgress}%</p>
+                <p className="text-sm font-medium text-slate-600">Complete</p>
+              </div>
+              
+              <div className="space-y-3">
+                <Progress 
+                  value={currentProgress} 
+                  className="h-3 bg-slate-200"
+                  style={{
+                    background: 'linear-gradient(to right, #dcfce7 0%, #bbf7d0 100%)'
+                  }}
+                />
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">
+                    {projectTasks.filter(task => task.status === 'completed').length} of {projectTasks.length} tasks
+                  </span>
+                  <span className="font-medium text-green-700">
+                    {projectTasks.length - projectTasks.filter(task => task.status === 'completed').length} remaining
+                  </span>
+                </div>
               </div>
             </div>
           </CardContent>
