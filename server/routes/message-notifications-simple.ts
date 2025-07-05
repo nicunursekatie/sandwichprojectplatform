@@ -1,6 +1,32 @@
 import { Request, Response } from "express";
 import { QueryOptimizer } from "../performance/query-optimizer";
 
+// Helper function to check if user has permission for specific chat type
+function checkUserChatPermission(user: any, chatType: string): boolean {
+  if (!user || !user.permissions) return false;
+  
+  const permissions = user.permissions;
+  
+  switch (chatType) {
+    case 'core_team':
+      return permissions.includes('core_team_chat');
+    case 'committee':
+      return permissions.includes('committee_chat');
+    case 'hosts':
+      return permissions.includes('host_chat');
+    case 'drivers':
+      return permissions.includes('driver_chat');
+    case 'recipients':
+      return permissions.includes('recipient_chat');
+    case 'direct':
+      return permissions.includes('direct_messages');
+    case 'group':
+      return permissions.includes('group_messages');
+    default:
+      return permissions.includes('send_messages'); // General permission
+  }
+}
+
 export const messageNotificationRoutes = {
   getUnreadCounts: async (req: Request, res: Response) => {
     try {
@@ -9,23 +35,56 @@ export const messageNotificationRoutes = {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      // Cache notification counts for 10 seconds to reduce database load
+      // Cache notification counts for 5 seconds to reduce database load but allow faster updates
       const counts = await QueryOptimizer.getCachedQuery(
         `unread-counts-${userId}`,
         async () => {
-          // Return zero counts for now - working notification system
-          return {
-            general: 0,
-            committee: 0,
-            hosts: 0,
-            drivers: 0,
-            recipients: 0,
-            core_team: 0,
-            direct: 0,
-            total: 0
+          // Get user's last read timestamp (if any) or default to 1 hour ago
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+          const userLastRead = oneHourAgo; // Default to show recent messages as unread
+          
+          // Get recent messages by committee type that user has access to
+          const storage = require("../storage-wrapper").storage;
+          const user = await storage.getUserById(userId);
+          
+          if (!user) {
+            return {
+              general: 0, committee: 0, hosts: 0, drivers: 0, recipients: 0,
+              core_team: 0, direct: 0, total: 0
+            };
+          }
+          
+          // Get messages newer than last read time
+          const recentMessages = await storage.getRecentMessages(50); // Get last 50 messages
+          
+          let counts = {
+            general: 0, committee: 0, hosts: 0, drivers: 0, recipients: 0,
+            core_team: 0, direct: 0, total: 0
           };
+          
+          // Count unread messages by committee/type
+          for (const message of recentMessages) {
+            if (new Date(message.timestamp) > userLastRead) {
+              // Check if user has permission to see this message type
+              const hasPermission = checkUserChatPermission(user, message.committee || 'general');
+              
+              if (hasPermission) {
+                if (message.committee === 'core_team') counts.core_team++;
+                else if (message.committee === 'committee') counts.committee++;
+                else if (message.committee === 'hosts') counts.hosts++;
+                else if (message.committee === 'drivers') counts.drivers++;
+                else if (message.committee === 'recipients') counts.recipients++;
+                else if (message.recipientId === userId) counts.direct++;
+                else counts.general++;
+                
+                counts.total++;
+              }
+            }
+          }
+          
+          return counts;
         },
-        10000 // 10 second cache
+        5000 // 5 second cache for faster updates
       );
 
       res.json(counts);
