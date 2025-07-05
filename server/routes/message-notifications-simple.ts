@@ -22,8 +22,10 @@ function checkUserChatPermission(user: any, chatType: string): boolean {
       return permissions.includes('direct_messages');
     case 'group':
       return permissions.includes('group_messages');
+    case 'general':
+      return permissions.includes('general_chat');
     default:
-      return permissions.includes('send_messages'); // General permission
+      return permissions.includes('general_chat'); // Default to general chat permission
   }
 }
 
@@ -39,9 +41,10 @@ export const messageNotificationRoutes = {
       const counts = await QueryOptimizer.getCachedQuery(
         `unread-counts-${userId}`,
         async () => {
-          // Get user's last read timestamp (if any) or default to 1 hour ago
-          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-          const userLastRead = oneHourAgo; // Default to show recent messages as unread
+          // Get user's last read timestamp (if any) or default to 24 hours ago
+          // This will show messages from the last 24 hours as potentially unread
+          const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const userLastRead = twentyFourHoursAgo; // Default to show recent messages as unread
           
           // Get recent messages by committee type that user has access to
           const storage = require("../storage-wrapper").storage;
@@ -50,16 +53,19 @@ export const messageNotificationRoutes = {
           if (!user) {
             return {
               general: 0, committee: 0, hosts: 0, drivers: 0, recipients: 0,
-              core_team: 0, direct: 0, total: 0
+              core_team: 0, direct: 0, groups: 0, total: 0
             };
           }
           
           // Get messages newer than last read time
-          const recentMessages = await storage.getRecentMessages(50); // Get last 50 messages
+          const recentMessages = await storage.getRecentMessages(100); // Get last 100 messages
+          
+          console.log(`[DEBUG] User ${userId} checking unread counts. Found ${recentMessages.length} recent messages`);
+          console.log(`[DEBUG] User last read time: ${userLastRead}`);
           
           let counts = {
             general: 0, committee: 0, hosts: 0, drivers: 0, recipients: 0,
-            core_team: 0, direct: 0, total: 0
+            core_team: 0, direct: 0, groups: 0, total: 0
           };
           
           // Count unread messages by committee/type
@@ -68,6 +74,8 @@ export const messageNotificationRoutes = {
               // Check if user has permission to see this message type
               const hasPermission = checkUserChatPermission(user, message.committee || 'general');
               
+              console.log(`[DEBUG] Message: ${message.id}, committee: ${message.committee}, hasPermission: ${hasPermission}, timestamp: ${message.timestamp}`);
+              
               if (hasPermission) {
                 if (message.committee === 'core_team') counts.core_team++;
                 else if (message.committee === 'committee') counts.committee++;
@@ -75,12 +83,15 @@ export const messageNotificationRoutes = {
                 else if (message.committee === 'drivers') counts.drivers++;
                 else if (message.committee === 'recipients') counts.recipients++;
                 else if (message.recipientId === userId) counts.direct++;
+                else if (message.committee === 'groups') counts.groups++;
                 else counts.general++;
                 
                 counts.total++;
               }
             }
           }
+          
+          console.log(`[DEBUG] Final counts for user ${userId}:`, counts);
           
           return counts;
         },
@@ -98,6 +109,7 @@ export const messageNotificationRoutes = {
         recipients: 0,
         core_team: 0,
         direct: 0,
+        groups: 0,
         total: 0
       });
     }
