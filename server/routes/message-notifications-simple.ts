@@ -35,56 +35,47 @@ export const messageNotificationRoutes = {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      // Cache notification counts for 5 seconds to reduce database load but allow faster updates
+      // Cache notification counts for 2 seconds to reduce database load but allow faster updates
       const counts = await QueryOptimizer.getCachedQuery(
         `unread-counts-${userId}`,
         async () => {
-          // Get user's last read timestamp (if any) or default to 1 hour ago
+          // For now, let's count recent messages (last hour) as "unread"
           const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-          const userLastRead = oneHourAgo; // Default to show recent messages as unread
           
-          // Get recent messages by committee type that user has access to
+          // Get recent messages
           const storage = require("../storage-wrapper").storage;
-          const user = await storage.getUserById(userId);
-          
-          if (!user) {
-            return {
-              general: 0, committee: 0, hosts: 0, drivers: 0, recipients: 0,
-              core_team: 0, direct: 0, total: 0
-            };
-          }
-          
-          // Get messages newer than last read time
-          const recentMessages = await storage.getRecentMessages(50); // Get last 50 messages
+          const recentMessages = await storage.getRecentMessages(50);
           
           let counts = {
             general: 0, committee: 0, hosts: 0, drivers: 0, recipients: 0,
             core_team: 0, direct: 0, total: 0
           };
           
-          // Count unread messages by committee/type
+          // Count recent messages by committee type (simple approach)
           for (const message of recentMessages) {
-            if (new Date(message.timestamp) > userLastRead) {
-              // Check if user has permission to see this message type
-              const hasPermission = checkUserChatPermission(user, message.committee || 'general');
-              
-              if (hasPermission) {
-                if (message.committee === 'core_team') counts.core_team++;
-                else if (message.committee === 'committee') counts.committee++;
-                else if (message.committee === 'hosts') counts.hosts++;
-                else if (message.committee === 'drivers') counts.drivers++;
-                else if (message.committee === 'recipients') counts.recipients++;
-                else if (message.recipientId === userId) counts.direct++;
-                else counts.general++;
-                
-                counts.total++;
+            if (new Date(message.timestamp) > oneHourAgo) {
+              if (message.committee === 'core_team') {
+                counts.core_team++;
+              } else if (message.committee === 'committee') {
+                counts.committee++;
+              } else if (message.committee === 'hosts') {
+                counts.hosts++;
+              } else if (message.committee === 'drivers') {
+                counts.drivers++;
+              } else if (message.committee === 'recipients') {
+                counts.recipients++;
+              } else if (message.recipientId === userId) {
+                counts.direct++;
+              } else {
+                counts.general++;
               }
+              counts.total++;
             }
           }
           
           return counts;
         },
-        5000 // 5 second cache for faster updates
+        2000 // 2 second cache for faster updates
       );
 
       res.json(counts);
