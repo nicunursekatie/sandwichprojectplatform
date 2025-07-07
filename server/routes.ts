@@ -6169,8 +6169,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create or get direct conversation between two users
   app.post("/api/conversations/direct", isAuthenticated, async (req, res) => {
+    console.log('=== POST /api/conversations/direct START ===');
     try {
       const user = (req as any).user;
+      console.log('User:', user);
+      console.log('Request body:', req.body);
+      
       const { otherUserId } = req.body;
 
       if (!otherUserId) {
@@ -6212,8 +6216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .insert(conversations)
         .values({
           type: 'direct',
-          name: null,
-          createdAt: new Date().toISOString()
+          name: null
         })
         .returning();
 
@@ -6221,20 +6224,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.insert(conversationParticipants).values([
         {
           conversationId: newConversation.id,
-          userId: user.id,
-          joinedAt: new Date().toISOString()
+          userId: user.id
         },
         {
           conversationId: newConversation.id,
-          userId: otherUserId,
-          joinedAt: new Date().toISOString()
+          userId: otherUserId
         }
       ]);
 
       res.json(newConversation);
     } catch (error) {
-      console.error('[API] Error creating direct conversation:', error);
-      res.status(500).json({ message: "Failed to create conversation" });
+      console.error('=== POST /api/conversations/direct ERROR ===');
+      console.error('[ERROR] Full error object:', error);
+      console.error('[ERROR] Error name:', error.name);
+      console.error('[ERROR] Error message:', error.message);
+      console.error('[ERROR] Error stack:', error.stack);
+      if (error.code) console.error('[ERROR] Error code:', error.code);
+      if (error.detail) console.error('[ERROR] Error detail:', error.detail);
+      if (error.hint) console.error('[ERROR] Error hint:', error.hint);
+      console.error('=== POST /api/conversations/direct ERROR END ===');
+      
+      res.status(500).json({ 
+        message: "Failed to create conversation",
+        error: error.message,
+        details: error.detail || 'No additional details'
+      });
     }
   });
 
