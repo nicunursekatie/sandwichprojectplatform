@@ -763,7 +763,7 @@ export async function initializeTempAuth() {
         firstName: "Admin",
         lastName: "User",
         role: "admin",
-        permissions: [],
+        permissions: getDefaultPermissionsForRole("admin"),
         isActive: true,
         profileImageUrl: null,
         metadata: { password: "admin123" } // Default password for convenience
