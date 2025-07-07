@@ -4698,38 +4698,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let userGroups;
       
       if (canModerateMessages) {
-        // Super admins and moderators see ALL groups
+        // Super admins and moderators see ALL group conversations
         userGroups = await db
           .select({
-            id: messageGroups.id,
-            name: messageGroups.name,
-            description: messageGroups.description,
-            createdBy: messageGroups.createdBy,
-            isActive: messageGroups.isActive,
-            createdAt: messageGroups.createdAt,
+            id: conversations.id,
+            name: conversations.name,
+            description: sql<string>`null`, // No description field in conversations table
+            createdBy: sql<string>`null`, // No createdBy field in conversations table
+            isActive: sql<boolean>`true`, // All conversations are active by default
+            createdAt: conversations.createdAt,
             userRole: sql<string>`'moderator'` // Mark as moderator role for super admins
           })
-          .from(messageGroups)
-          .where(eq(messageGroups.isActive, true));
+          .from(conversations)
+          .where(eq(conversations.type, 'group'));
       } else {
-        // Regular users only see groups where they are members
+        // Regular users only see group conversations where they are participants
         userGroups = await db
           .select({
-            id: messageGroups.id,
-            name: messageGroups.name,
-            description: messageGroups.description,
-            createdBy: messageGroups.createdBy,
-            isActive: messageGroups.isActive,
-            createdAt: messageGroups.createdAt,
-            userRole: groupMemberships.role
+            id: conversations.id,
+            name: conversations.name,
+            description: sql<string>`null`, // No description field in conversations table
+            createdBy: sql<string>`null`, // No createdBy field in conversations table
+            isActive: sql<boolean>`true`, // All conversations are active by default
+            createdAt: conversations.createdAt,
+            userRole: sql<string>`'member'` // Regular participants are members
           })
-          .from(messageGroups)
-          .innerJoin(groupMemberships, eq(messageGroups.id, groupMemberships.groupId))
+          .from(conversations)
+          .innerJoin(conversationParticipants, eq(conversations.id, conversationParticipants.conversationId))
           .where(
             and(
-              eq(messageGroups.isActive, true),
-              eq(groupMemberships.userId, userId),
-              eq(groupMemberships.isActive, true)
+              eq(conversations.type, 'group'),
+              eq(conversationParticipants.userId, userId)
             )
           );
       }
@@ -4739,13 +4738,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userGroups.map(async (group) => {
           const memberCount = await db
             .select({ count: sql<number>`count(*)` })
-            .from(groupMemberships)
-            .where(
-              and(
-                eq(groupMemberships.groupId, group.id),
-                eq(groupMemberships.isActive, true)
-              )
-            );
+            .from(conversationParticipants)
+            .where(eq(conversationParticipants.conversationId, group.id));
           
           return {
             ...group,
