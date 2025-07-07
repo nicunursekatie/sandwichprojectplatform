@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { useMessageReads } from "@/hooks/useMessageReads";
 
 interface Message {
   id: number;
@@ -53,6 +54,9 @@ export default function CommitteeChat() {
   const [selectedCommittee, setSelectedCommittee] = useState<any>(null);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Initialize read tracking hook
+  const { useAutoMarkAsRead } = useMessageReads();
 
   // Get user profile for display name
   const { data: userProfile } = useQuery({
@@ -77,22 +81,43 @@ export default function CommitteeChat() {
     return 'Team Member';
   };
 
-  const { data: messages = [] } = useQuery({
-    queryKey: ['/api/messages', 'committee', selectedCommittee?.id],
+  // Get or create committee conversation
+  const { data: committeeConversation } = useQuery({
+    queryKey: ["/api/conversations/committee", selectedCommittee?.id],
     queryFn: async () => {
-      const response = await fetch(`/api/messages?committee=${selectedCommittee.id}`);
-      if (!response.ok) return [];
-      return response.json();
+      if (!selectedCommittee) return null;
+      const response = await apiRequest('POST', '/api/conversations', {
+        type: 'channel',
+        name: `${selectedCommittee.name}`
+      });
+      return response;
     },
-    enabled: !!selectedCommittee
+    enabled: !!selectedCommittee,
   });
 
+  // Fetch messages for committee conversation
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ["/api/conversations", committeeConversation?.id, "messages"],
+    enabled: !!committeeConversation,
+    refetchInterval: 3000,
+  });
+
+  // Auto-mark messages as read when viewing committee
+  useAutoMarkAsRead(
+    selectedCommittee?.id || "", 
+    messages, 
+    !!selectedCommittee
+  );
+
   const sendMessageMutation = useMutation({
-    mutationFn: async (data: { content: string; committee: string; sender: string }) => {
-      return await apiRequest('POST', '/api/messages', data);
+    mutationFn: async (data: { content: string }) => {
+      if (!committeeConversation) throw new Error("No conversation available");
+      return await apiRequest('POST', `/api/conversations/${committeeConversation.id}/messages`, {
+        content: data.content
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/messages', 'committee', selectedCommittee?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", committeeConversation?.id, "messages"] });
       setNewMessage("");
     },
     onError: () => {
@@ -109,7 +134,7 @@ export default function CommitteeChat() {
       return await apiRequest('DELETE', `/api/messages/${messageId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/messages', 'committee', selectedCommittee?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", committeeConversation?.id, "messages"] });
       toast({
         title: "Message deleted",
         description: "The message has been removed",
@@ -125,12 +150,10 @@ export default function CommitteeChat() {
   });
 
   const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedCommittee) return;
+    if (!newMessage.trim()) return;
 
     sendMessageMutation.mutate({
-      content: newMessage.trim(),
-      committee: selectedCommittee.id,
-      sender: getUserName()
+      content: newMessage.trim()
     });
   };
 

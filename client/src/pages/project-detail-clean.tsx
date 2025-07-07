@@ -15,6 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CelebrationToast, useCelebration } from "@/components/celebration-toast";
 import { ProjectAssigneeSelector } from "@/components/project-assignee-selector";
 import { TaskAssigneeSelector } from "@/components/task-assignee-selector";
+import { MultiUserTaskCompletion } from "@/components/multi-user-task-completion";
+import ProjectCongratulations from "@/components/project-congratulations";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +44,8 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
     priority: "medium",
     assigneeId: undefined as string | undefined,
     assigneeName: undefined as string | undefined,
+    assigneeIds: undefined as string[] | undefined,
+    assigneeNames: undefined as string[] | undefined,
     dueDate: ""
   });
   const [editProject, setEditProject] = useState({
@@ -77,7 +81,17 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-      setNewTask({ title: "", description: "", status: "pending", priority: "medium", assigneeId: undefined, assigneeName: undefined, dueDate: "" });
+      setNewTask({ 
+        title: "", 
+        description: "", 
+        status: "pending", 
+        priority: "medium", 
+        assigneeId: undefined, 
+        assigneeName: undefined, 
+        assigneeIds: undefined, 
+        assigneeNames: undefined, 
+        dueDate: "" 
+      });
       setIsAddingTask(false);
       toast({ title: "Task created successfully" });
     },
@@ -196,8 +210,34 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
     }
   };
 
-  const handleToggleTaskCompletion = (task: ProjectTask) => {
+  const handleToggleTaskCompletion = async (task: ProjectTask) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+    
+    // For multi-user tasks, check if all team members have completed before allowing main completion
+    if (newStatus === 'completed' && task.assigneeIds?.length > 1) {
+      try {
+        const completionsResponse = await apiRequest('GET', `/api/tasks/${task.id}/completions`);
+        const completions = completionsResponse || [];
+        const totalAssignees = task.assigneeIds.length;
+        
+        if (completions.length < totalAssignees) {
+          toast({
+            title: "Team Completion Required",
+            description: `All ${totalAssignees} team members must complete their portions first (${completions.length}/${totalAssignees} completed)`,
+            variant: "destructive"
+          });
+          return; // Prevent main completion
+        }
+      } catch (error) {
+        console.error('Failed to check team completions:', error);
+        toast({
+          title: "Error",
+          description: "Failed to verify team completion status",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
     
     // If we're marking the task as completed, trigger celebration
     if (newStatus === 'completed') {
@@ -547,6 +587,14 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
         </Card>
       </div>
 
+      {/* Project Congratulations Section - Only show for completed projects */}
+      <ProjectCongratulations 
+        projectId={projectId}
+        projectTitle={project.title}
+        currentUser={user}
+        isCompleted={project.status === 'completed'}
+      />
+
       {/* Tasks Section */}
       <Tabs defaultValue="tasks" className="w-full">
         <TabsList>
@@ -620,18 +668,23 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <Label>Assignee</Label>
+                      <Label>Assignees (Multiple Allowed)</Label>
                       <TaskAssigneeSelector
+                        multiple={true}
                         value={{ 
                           assigneeId: newTask.assigneeId, 
-                          assigneeName: newTask.assigneeName 
+                          assigneeName: newTask.assigneeName,
+                          assigneeIds: newTask.assigneeIds,
+                          assigneeNames: newTask.assigneeNames
                         }}
                         onChange={(value) => setNewTask({ 
                           ...newTask, 
                           assigneeId: value.assigneeId,
-                          assigneeName: value.assigneeName 
+                          assigneeName: value.assigneeName,
+                          assigneeIds: value.assigneeIds,
+                          assigneeNames: value.assigneeNames
                         })}
-                        placeholder="Assign to someone"
+                        placeholder="Assign to multiple people"
                       />
                     </div>
                     <div>
@@ -683,6 +736,9 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
                             onCheckedChange={() => handleToggleTaskCompletion(task)}
                             disabled={!canEdit}
                             className="w-5 h-5"
+                            title={task.assigneeIds?.length > 1 ? "All team members must complete their portions first" : "Mark task complete"}
+                            className="w-5 h-5"
+                            title={task.assigneeIds?.length > 1 ? "All team members must complete their portions first" : "Mark task complete"}
                           />
                         </div>
                         <div className="flex-1">
@@ -704,7 +760,27 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
                             </p>
                           )}
                           <div className="flex items-center space-x-4 text-sm text-slate-500">
-                            {task.assigneeName && (
+                            {/* Multiple Assignees Display */}
+                            {(task.assigneeIds?.length > 0 || task.assigneeNames?.length > 0) && (
+                              <div className="flex items-center space-x-2">
+                                <div className="flex items-center">
+                                  <User className="w-3 h-3 mr-1" />
+                                  <div className="flex flex-wrap gap-1">
+                                    {/* Show new multi-assignee format */}
+                                    {task.assigneeNames?.map((name, index) => (
+                                      <Badge key={index} variant="outline" className="text-xs">
+                                        {name}
+                                        {task.assigneeIds?.[index] && (
+                                          <span className="ml-1 text-green-600">👤</span>
+                                        )}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            {/* Fallback for single assignee (backward compatibility) */}
+                            {task.assigneeName && (!task.assigneeIds || task.assigneeIds.length === 0) && (
                               <div className="flex items-center space-x-2">
                                 <div className="flex items-center">
                                   <User className="w-3 h-3 mr-1" />
@@ -724,6 +800,25 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
                               </div>
                             )}
                           </div>
+
+                          {/* Multi-user completion system for tasks with multiple assignees */}
+                          {task.assigneeIds?.length > 1 && (
+                            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="text-sm font-medium text-blue-800 mb-3">Team Completion Status</div>
+                              <MultiUserTaskCompletion
+                                taskId={task.id}
+                                assigneeIds={task.assigneeIds || []}
+                                assigneeNames={task.assigneeNames || []}
+                                currentUserId={user?.id}
+                                currentUserName={user?.displayName || user?.email}
+                                taskStatus={task.status}
+                                onStatusChange={(isCompleted) => {
+                                  queryClient.invalidateQueries({ queryKey: ['/api/projects', project.id, 'tasks'] });
+                                  queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-1 ml-2 sm:ml-4 shrink-0">
@@ -794,11 +889,23 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <Label htmlFor="edit-task-assignee">Assignee</Label>
-                                    <Input
-                                      id="edit-task-assignee"
-                                      value={editingTask.assigneeName || ""}
-                                      onChange={(e) => setEditingTask({ ...editingTask, assigneeName: e.target.value })}
+                                    <Label htmlFor="edit-task-assignee">Assignees (Multiple Allowed)</Label>
+                                    <TaskAssigneeSelector
+                                      multiple={true}
+                                      value={{ 
+                                        assigneeId: editingTask.assigneeId, 
+                                        assigneeName: editingTask.assigneeName,
+                                        assigneeIds: editingTask.assigneeIds || [],
+                                        assigneeNames: editingTask.assigneeNames || []
+                                      }}
+                                      onChange={(value) => setEditingTask({ 
+                                        ...editingTask, 
+                                        assigneeId: value.assigneeId,
+                                        assigneeName: value.assigneeName,
+                                        assigneeIds: value.assigneeIds,
+                                        assigneeNames: value.assigneeNames
+                                      })}
+                                      placeholder="Assign to multiple people"
                                     />
                                   </div>
                                   <div>

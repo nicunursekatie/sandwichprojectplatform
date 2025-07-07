@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar, jsonb, index, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, varchar, jsonb, index, decimal, unique, primaryKey } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -84,8 +84,10 @@ export const projectTasks = pgTable("project_tasks", {
   description: text("description"),
   status: text("status").notNull().default("pending"), // 'pending', 'in_progress', 'completed'
   priority: text("priority").notNull().default("medium"), // 'low', 'medium', 'high'
-  assigneeId: text("assignee_id"), // Reference to users table
-  assigneeName: text("assignee_name"), // Keep for backward compatibility and external users
+  assigneeId: text("assignee_id"), // Single assignee - kept for backward compatibility
+  assigneeName: text("assignee_name"), // Single assignee name - kept for backward compatibility
+  assigneeIds: text("assignee_ids").array(), // Multiple assignee IDs as JSON array
+  assigneeNames: text("assignee_names").array(), // Multiple assignee names as JSON array
   dueDate: text("due_date"),
   completedAt: timestamp("completed_at"),
   attachments: text("attachments"), // JSON array of file paths
@@ -102,6 +104,17 @@ export const projectComments = pgTable("project_comments", {
   commentType: text("comment_type").notNull().default("general"), // 'general', 'update', 'blocker', 'completion'
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const taskCompletions = pgTable("task_completions", {
+  id: serial("id").primaryKey(),
+  taskId: integer("task_id").notNull(),
+  userId: text("user_id").notNull(),
+  userName: text("user_name").notNull(),
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  notes: text("notes"),
+}, (table) => ({
+  uniqueTaskUser: unique().on(table.taskId, table.userId),
+}));
 
 // User-project assignments for visibility control
 export const projectAssignments = pgTable("project_assignments", {
@@ -149,61 +162,36 @@ export const announcements = pgTable("announcements", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// SIMPLE MESSAGING SYSTEM - 3 tables only
+
+// 1. Conversations - stores all conversation types
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // 'direct', 'group', 'channel'
+  name: text("name"), // NULL for direct messages, required for groups/channels
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// 2. Conversation participants - who's in each conversation
+export const conversationParticipants = pgTable("conversation_participants", {
+  conversationId: integer("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
+  joinedAt: timestamp("joined_at").defaultNow(),
+  lastReadAt: timestamp("last_read_at").defaultNow(),
+}, (table) => ({
+  pk: primaryKey({ columns: [table.conversationId, table.userId] }),
+}));
+
+// 3. Messages - simple message storage
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
-  sender: text("sender").notNull(),
-  userId: text("user_id"), // User ID who created the message - nullable for backwards compatibility
+  conversationId: integer("conversation_id").references(() => conversations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull(),
   content: text("content").notNull(),
-  timestamp: timestamp("timestamp").notNull().defaultNow(),
-  parentId: integer("parent_id"), // for threading - references another message
-  threadId: integer("thread_id"), // groups messages in same thread
-  replyCount: integer("reply_count").notNull().default(0), // number of replies
-  committee: text("committee").notNull().default("general"), // committee channel: general, marketing_committee, grant_committee, hosts, group_events, core_team, direct
-  recipientId: text("recipient_id"), // For direct messages
-});
-
-// Message read tracking table for notifications
-export const messageReads = pgTable("message_reads", {
-  id: serial("id").primaryKey(),
-  messageId: integer("message_id").notNull(),
-  userId: text("user_id").notNull(),
-  readAt: timestamp("read_at").notNull().defaultNow(),
-  committee: text("committee").notNull(), // Track which chat context the read occurred in
-});
-
-// Custom message groups table
-export const messageGroups = pgTable("message_groups", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description"),
-  createdBy: text("created_by").notNull(), // User ID who created the group
-  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Group memberships table
-export const groupMemberships = pgTable("group_memberships", {
-  id: serial("id").primaryKey(),
-  groupId: integer("group_id").notNull(),
-  userId: text("user_id").notNull(),
-  role: text("role").notNull().default("member"), // 'admin', 'member'
-  joinedAt: timestamp("joined_at").defaultNow(),
-  isActive: boolean("is_active").notNull().default(true),
-});
-
-// Individual thread participation tracking
-export const groupMessageParticipants = pgTable("group_message_participants", {
-  id: serial("id").primaryKey(),
-  threadId: integer("thread_id").notNull(), // References message_groups.id
-  userId: text("user_id").notNull(),
-  status: text("status").notNull().default("active"), // 'active', 'archived', 'left', 'muted'
-  lastReadAt: timestamp("last_read_at"),
-  joinedAt: timestamp("joined_at").notNull().defaultNow(),
-  leftAt: timestamp("left_at"),
-  archivedAt: timestamp("archived_at"),
-  mutedAt: timestamp("muted_at"),
-});
+// All complex messaging tables removed - using simple 3-table system above
 
 export const weeklyReports = pgTable("weekly_reports", {
   id: serial("id").primaryKey(),
@@ -355,7 +343,7 @@ export const projectDocuments = pgTable("project_documents", {
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, timestamp: true, replyCount: true, threadId: true });
+export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, createdAt: true });
 export const insertWeeklyReportSchema = createInsertSchema(weeklyReports).omit({ id: true, submittedAt: true });
 export const insertSandwichCollectionSchema = createInsertSchema(sandwichCollections).omit({ id: true, submittedAt: true });
 export const insertMeetingMinutesSchema = createInsertSchema(meetingMinutes).omit({ id: true });
@@ -375,6 +363,7 @@ export const insertProjectDocumentSchema = createInsertSchema(projectDocuments).
 export const insertProjectTaskSchema = createInsertSchema(projectTasks).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertProjectCommentSchema = createInsertSchema(projectComments).omit({ id: true, createdAt: true });
 export const insertProjectAssignmentSchema = createInsertSchema(projectAssignments).omit({ id: true, assignedAt: true });
+export const insertTaskCompletionSchema = createInsertSchema(taskCompletions).omit({ id: true, completedAt: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -412,6 +401,8 @@ export type ProjectComment = typeof projectComments.$inferSelect;
 export type InsertProjectComment = z.infer<typeof insertProjectCommentSchema>;
 export type ProjectAssignment = typeof projectAssignments.$inferSelect;
 export type InsertProjectAssignment = z.infer<typeof insertProjectAssignmentSchema>;
+export type TaskCompletion = typeof taskCompletions.$inferSelect;
+export type InsertTaskCompletion = z.infer<typeof insertTaskCompletionSchema>;
 
 // Hosted Files table
 export const hostedFiles = pgTable("hosted_files", {
@@ -532,41 +523,21 @@ export const insertAnnouncementSchema = createInsertSchema(announcements).omit({
 export type Announcement = typeof announcements.$inferSelect;
 export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
 
-// Message read tracking schema types
-export const insertMessageReadSchema = createInsertSchema(messageReads).omit({
+// Simple messaging schema types
+export const insertConversationSchema = createInsertSchema(conversations).omit({
   id: true,
-  readAt: true
+  createdAt: true
 });
 
-export type MessageRead = typeof messageReads.$inferSelect;
-export type InsertMessageRead = z.infer<typeof insertMessageReadSchema>;
-
-// Message group schema types
-export const insertMessageGroupSchema = createInsertSchema(messageGroups).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true
+export const insertConversationParticipantSchema = createInsertSchema(conversationParticipants).omit({
+  joinedAt: true,
+  lastReadAt: true
 });
 
-export type MessageGroup = typeof messageGroups.$inferSelect;
-export type InsertMessageGroup = z.infer<typeof insertMessageGroupSchema>;
-
-export const insertGroupMembershipSchema = createInsertSchema(groupMemberships).omit({
-  id: true,
-  joinedAt: true
-});
-
-export type GroupMembership = typeof groupMemberships.$inferSelect;
-export type InsertGroupMembership = z.infer<typeof insertGroupMembershipSchema>;
-
-// Group message participant schema types
-export const insertGroupMessageParticipantSchema = createInsertSchema(groupMessageParticipants).omit({
-  id: true,
-  joinedAt: true
-});
-
-export type GroupMessageParticipant = typeof groupMessageParticipants.$inferSelect;
-export type InsertGroupMessageParticipant = z.infer<typeof insertGroupMessageParticipantSchema>;
+export type Conversation = typeof conversations.$inferSelect;
+export type InsertConversation = z.infer<typeof insertConversationSchema>;
+export type ConversationParticipant = typeof conversationParticipants.$inferSelect;
+export type InsertConversationParticipant = z.infer<typeof insertConversationParticipantSchema>;
 
 // Google Sheets integration table
 export const googleSheets = pgTable("google_sheets", {

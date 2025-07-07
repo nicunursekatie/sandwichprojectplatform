@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
-import { MessageCircle, Plus, Users, Send, Crown, Trash2, UserPlus, Edit, MoreVertical, Archive, LogOut, VolumeX, Eye } from "lucide-react";
+import { useMessageReads } from "@/hooks/useMessageReads";
+import { MessageCircle, Plus, Users, Send, Crown, Trash2, UserPlus, Edit, MoreVertical, Archive, LogOut, VolumeX, Eye, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { MessageGroup, InsertMessageGroup, GroupMembership, Message, User } from "@shared/schema";
 import { PERMISSIONS } from "@shared/auth-utils";
@@ -37,6 +39,7 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
   const [newMessage, setNewMessage] = useState("");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [showMemberDialog, setShowMemberDialog] = useState(false);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [editedContent, setEditedContent] = useState("");
   const [groupForm, setGroupForm] = useState({
@@ -49,6 +52,9 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  
+  // Initialize read tracking hook
+  const { useAutoMarkAsRead } = useMessageReads();
 
   // Fetch user's message groups
   const { data: groups = [], isLoading: groupsLoading } = useQuery<GroupWithMembers[]>({
@@ -69,27 +75,50 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
     email: string;
   }>>({
     queryKey: ["/api/message-groups", selectedGroup?.id, "members"],
-    enabled: !!selectedGroup,
-  });
-
-  // Fetch messages for selected group with proper API call
-  const { data: groupMessages = [] } = useQuery<Message[]>({
-    queryKey: ["/api/messages", "group", selectedGroup?.id],
     queryFn: async () => {
       if (!selectedGroup) return [];
-      const response = await fetch(`/api/messages?groupId=${selectedGroup.id}`, {
+      const response = await fetch(`/api/message-groups/${selectedGroup.id}/members`, {
         credentials: 'include'
       });
       if (!response.ok) {
         if (response.status === 403) {
-          throw new Error("Not authorized to view messages in this group");
+          throw new Error("Not authorized to view members in this group");
         }
-        throw new Error("Failed to fetch group messages");
+        throw new Error("Failed to fetch group members");
       }
       return response.json();
     },
     enabled: !!selectedGroup,
   });
+
+  // Get or create group conversation
+  const { data: groupConversation } = useQuery({
+    queryKey: ["/api/conversations/group", selectedGroup?.id],
+    queryFn: async () => {
+      if (!selectedGroup) return null;
+      const response = await apiRequest('POST', '/api/conversations', {
+        type: 'group',
+        name: selectedGroup.name,
+        metadata: { groupId: selectedGroup.id }
+      });
+      return response;
+    },
+    enabled: !!selectedGroup,
+  });
+
+  // Fetch messages for group conversation
+  const { data: groupMessages = [] } = useQuery<Message[]>({
+    queryKey: ["/api/conversations", groupConversation?.id, "messages"],
+    enabled: !!groupConversation,
+    refetchInterval: 3000,
+  });
+
+  // Auto-mark group messages as read when viewing group
+  useAutoMarkAsRead(
+    "groups", 
+    groupMessages, 
+    !!selectedGroup
+  );
 
   // Create new group mutation
   const createGroupMutation = useMutation({
@@ -141,6 +170,7 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
       const response = await fetch(`/api/message-groups/${data.groupId}/members`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({ memberIds: data.memberIds }),
       });
       if (!response.ok) throw new Error("Failed to add members");
@@ -157,24 +187,14 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
 
   // Send message mutation  
   const sendMessageMutation = useMutation({
-    mutationFn: async (data: { content: string; committee: string }) => {
-      const messageData = {
-        ...data,
-        sender: currentUser?.firstName && currentUser?.lastName 
-          ? `${currentUser.firstName} ${currentUser.lastName}`
-          : currentUser?.email || "Anonymous",
-        userId: currentUser?.id
-      };
-      const response = await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(messageData),
+    mutationFn: async (data: { content: string }) => {
+      if (!groupConversation) throw new Error("No conversation available");
+      return await apiRequest('POST', `/api/conversations/${groupConversation.id}/messages`, {
+        content: data.content
       });
-      if (!response.ok) throw new Error("Failed to send message");
-      return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", "group", selectedGroup?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", groupConversation?.id, "messages"] });
       setNewMessage("");
     },
   });
@@ -182,16 +202,10 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
   // Edit message mutation
   const editMessageMutation = useMutation({
     mutationFn: async ({ messageId, content }: { messageId: number; content: string }) => {
-      const response = await fetch(`/api/messages/${messageId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content }),
-      });
-      if (!response.ok) throw new Error("Failed to edit message");
-      return response.json();
+      return await apiRequest('PATCH', `/api/messages/${messageId}`, { content });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", "group", selectedGroup?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", groupConversation?.id, "messages"] });
       setEditingMessage(null);
       setEditedContent("");
       toast({ title: "Message updated successfully!" });
@@ -201,14 +215,10 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
   // Delete message mutation
   const deleteMessageMutation = useMutation({
     mutationFn: async (messageId: number) => {
-      const response = await fetch(`/api/messages/${messageId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) throw new Error("Failed to delete message");
-      return response.json();
+      return await apiRequest('DELETE', `/api/messages/${messageId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", "group", selectedGroup?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", groupConversation?.id, "messages"] });
       toast({ title: "Message deleted successfully!" });
     },
   });
@@ -250,6 +260,64 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
     },
   });
 
+
+
+  // Remove member mutation
+  const removeMemberMutation = useMutation({
+    mutationFn: async ({ groupId, userId }: { groupId: number; userId: string }) => {
+      const response = await fetch(`/api/message-groups/${groupId}/members/${userId}`, {
+        method: "DELETE",
+        credentials: 'include'
+      });
+      if (!response.ok) throw new Error("Failed to remove member");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/message-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/message-groups", selectedGroup?.id, "members"] });
+      toast({ title: "Member removed successfully!" });
+    },
+  });
+
+  // Promote member to admin mutation
+  const promoteMemberMutation = useMutation({
+    mutationFn: async ({ groupId, userId, role }: { groupId: number; userId: string; role: 'admin' | 'member' }) => {
+      const response = await fetch(`/api/message-groups/${groupId}/members/${userId}/role`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: 'include',
+        body: JSON.stringify({ role }),
+      });
+      if (!response.ok) throw new Error("Failed to update member role");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/message-groups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/message-groups", selectedGroup?.id, "members"] });
+      toast({ title: "Member role updated successfully!" });
+    },
+  });
+
+  // Delete entire group mutation (super admin only)
+  const deleteGroupMutation = useMutation({
+    mutationFn: async (groupId: number) => {
+      const response = await fetch(`/api/message-groups/${groupId}`, {
+        method: "DELETE",
+        credentials: 'include',
+      });
+      if (!response.ok) throw new Error("Failed to delete group");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/message-groups"] });
+      setSelectedGroup(null);
+      toast({ title: "Group deleted successfully!", description: "The entire group and all messages have been permanently removed." });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete group", variant: "destructive" });
+    },
+  });
+
   const handleCreateGroup = () => {
     if (!groupForm.name.trim()) {
       toast({ title: "Group name is required", variant: "destructive" });
@@ -273,11 +341,10 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
   };
 
   const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedGroup) return;
+    if (!newMessage.trim()) return;
     
     sendMessageMutation.mutate({
       content: newMessage,
-      committee: `group_${selectedGroup.id}`,
     });
   };
 
@@ -489,7 +556,16 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
                         )}
                         <div className="flex items-center gap-1 mt-1">
                           <Users className="h-3 w-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">{group.memberCount} members</span>
+                          <button 
+                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedGroup(group);
+                              setShowMemberDialog(true);
+                            }}
+                          >
+                            {group.memberCount} members
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -511,13 +587,22 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
                 <div>
                   <h3 className="font-semibold flex items-center gap-2">
                     {selectedGroup.name}
-                    {selectedGroup.userRole === 'admin' && (
+                    {(selectedGroup.userRole === 'admin' || selectedGroup.userRole === 'moderator' || currentUser?.role === 'super_admin') && (
                       <Crown className="h-4 w-4 text-yellow-500" />
                     )}
                   </h3>
                   {selectedGroup.description && (
                     <p className="text-sm text-gray-500">{selectedGroup.description}</p>
                   )}
+                  <div className="flex items-center gap-2 mt-1">
+                    <button 
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
+                      onClick={() => setShowMemberDialog(true)}
+                    >
+                      <Users className="h-3 w-3" />
+                      {selectedGroup.memberCount} members
+                    </button>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">
@@ -555,10 +640,24 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
                         <LogOut className="h-4 w-4 mr-2" />
                         Leave Conversation
                       </DropdownMenuItem>
+                      {currentUser?.role === 'super_admin' && (
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            if (confirm(`⚠️ DANGER: Delete entire group "${selectedGroup.name}"?\n\nThis will permanently delete:\n• All messages in this group\n• All member information\n• The entire conversation thread\n\nThis action CANNOT be undone. Are you absolutely sure?`)) {
+                              deleteGroupMutation.mutate(selectedGroup.id);
+                            }
+                          }}
+                          disabled={deleteGroupMutation.isPending}
+                          className="text-red-700 hover:text-red-800 font-semibold border-t"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete Entire Group
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {selectedGroup.userRole === 'admin' && (
+                  {(currentUser?.role === 'super_admin' || selectedGroup.userRole === 'admin' || selectedGroup.userRole === 'moderator' || selectedGroup.userRole === 'member') && (
                     <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
                       <DialogTrigger asChild>
                         <Button size="sm" variant="outline">
@@ -752,6 +851,188 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
           </div>
         )}
       </div>
+
+      {/* Member Management Dialog */}
+      <Dialog open={showMemberDialog} onOpenChange={setShowMemberDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Group Members - {selectedGroup?.name}</DialogTitle>
+            <DialogDescription>
+              View and manage group members. Admins can add or remove members.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Current Members */}
+            <div>
+              <h4 className="font-medium mb-3 flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Current Members ({groupMembers.length})
+              </h4>
+              <div className="max-h-60 overflow-y-auto space-y-2">
+                {groupMembers.map((member) => (
+                  <div key={member.userId} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback>
+                          {member.firstName?.[0]?.toUpperCase() || "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">
+                          {member.firstName} {member.lastName}
+                        </div>
+                        <div className="text-sm text-gray-500">{member.email}</div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {member.role === 'admin' && (
+                        <Badge variant="secondary" className="text-xs">
+                          <Crown className="h-3 w-3 mr-1" />
+                          Admin
+                        </Badge>
+                      )}
+                      {/* Platform super admin or group admin can manage members */}
+                      {(currentUser?.role === 'super_admin' || selectedGroup?.userRole === 'admin' || selectedGroup?.userRole === 'moderator') && (
+                        <div className="flex items-center gap-1">
+                          {/* Role Management Dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {member.role === 'member' ? (
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    if (confirm(`Promote ${member.firstName} ${member.lastName} to group admin?`)) {
+                                      promoteMemberMutation.mutate({
+                                        groupId: selectedGroup.id,
+                                        userId: member.userId,
+                                        role: 'admin'
+                                      });
+                                    }
+                                  }}
+                                  disabled={promoteMemberMutation.isPending}
+                                >
+                                  <Crown className="h-3 w-3 mr-2" />
+                                  Promote to Admin
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem 
+                                  onClick={() => {
+                                    if (confirm(`Demote ${member.firstName} ${member.lastName} to regular member?`)) {
+                                      promoteMemberMutation.mutate({
+                                        groupId: selectedGroup.id,
+                                        userId: member.userId,
+                                        role: 'member'
+                                      });
+                                    }
+                                  }}
+                                  disabled={promoteMemberMutation.isPending}
+                                >
+                                  <Crown className="h-3 w-3 mr-2" />
+                                  Demote to Member
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem 
+                                onClick={() => {
+                                  if (confirm(`Remove ${member.firstName} ${member.lastName} from this group?`)) {
+                                    removeMemberMutation.mutate({
+                                      groupId: selectedGroup.id,
+                                      userId: member.userId,
+                                    });
+                                  }
+                                }}
+                                disabled={removeMemberMutation.isPending}
+                                className="text-red-600"
+                              >
+                                <X className="h-3 w-3 mr-2" />
+                                Remove Member
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Add Members Section (Platform super admin or any group member can add) */}
+            {(currentUser?.role === 'super_admin' || selectedGroup?.userRole === 'admin' || selectedGroup?.userRole === 'moderator' || selectedGroup?.userRole === 'member') && (
+              <div className="border-t pt-4">
+                <h4 className="font-medium mb-3 flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Add New Members
+                </h4>
+                <div className="space-y-3">
+                  <Select
+                    value=""
+                    onValueChange={(userId) => {
+                      if (userId && !addMemberForm.memberIds.includes(userId)) {
+                        setAddMemberForm(prev => ({
+                          memberIds: [...prev.memberIds, userId]
+                        }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select users to add..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allUsers
+                        .filter(user => 
+                          !groupMembers.some(member => member.userId === user.id) &&
+                          !addMemberForm.memberIds.includes(user.id)
+                        )
+                        .map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.firstName} {user.lastName} ({user.email})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Selected Users to Add */}
+                  {addMemberForm.memberIds.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Selected to add:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {addMemberForm.memberIds.map((userId) => {
+                          const user = allUsers.find(u => u.id === userId);
+                          return (
+                            <Badge key={userId} variant="secondary" className="flex items-center gap-1">
+                              {user?.firstName} {user?.lastName}
+                              <X
+                                className="h-3 w-3 cursor-pointer"
+                                onClick={() => {
+                                  setAddMemberForm(prev => ({
+                                    memberIds: prev.memberIds.filter(id => id !== userId)
+                                  }));
+                                }}
+                              />
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        onClick={handleAddMembers}
+                        disabled={addMembersMutation.isPending}
+                        className="w-full"
+                      >
+                        {addMembersMutation.isPending ? "Adding..." : `Add ${addMemberForm.memberIds.length} Member(s)`}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

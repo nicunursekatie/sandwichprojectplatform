@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useMessageReads } from "@/hooks/useMessageReads";
 import type { Message } from "@shared/schema";
 
 interface CommitteeMessageLogProps {
@@ -18,6 +19,9 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Initialize read tracking hook
+  const { useAutoMarkAsRead } = useMessageReads();
 
   // Get user profile for display name
   const { data: userProfile } = useQuery({
@@ -43,33 +47,48 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
     return 'Team Member';
   };
 
-  const { data: messages = [], error, isLoading } = useQuery<Message[]>({
-    queryKey: [`committee-messages`, committee],
+  const canDeleteMessage = (message: Message) => {
+    const currentUser = user as any;
+    const isOwner = message.sender === getUserName();
+    const isSuperAdmin = currentUser?.role === "super_admin";
+    const isAdmin = currentUser?.role === "admin";
+    const hasModeratePermission = currentUser?.permissions?.includes("moderate_messages");
+    
+    return isOwner || isSuperAdmin || isAdmin || hasModeratePermission;
+  };
+
+  // Get or create committee conversation
+  const { data: committeeConversation } = useQuery({
+    queryKey: ["/api/conversations/committee", committee],
     queryFn: async () => {
-      console.log(`[CommitteeMessageLog] Fetching messages for committee: ${committee}`);
-      const response = await apiRequest("GET", `/api/messages?committee=${committee}`);
-      const data = await response.json();
-      console.log(`[CommitteeMessageLog] API Response:`, data);
-      console.log(`[CommitteeMessageLog] Response type:`, typeof data, Array.isArray(data));
-      
-      // Ensure we always return an array
-      if (!Array.isArray(data)) {
-        console.warn(`[CommitteeMessageLog] Expected array but got:`, typeof data, data);
-        return [];
-      }
-      
-      return data;
+      const response = await apiRequest('POST', '/api/conversations', {
+        type: 'channel',
+        name: `${committee.charAt(0).toUpperCase() + committee.slice(1)} Committee`
+      });
+      return response;
     },
-    refetchInterval: 3000, // Refetch every 3 seconds
-    staleTime: 0, // Always consider data stale for real-time messaging
+    enabled: !!committee,
   });
 
+  // Fetch messages for committee conversation
+  const { data: messages = [], error, isLoading } = useQuery<Message[]>({
+    queryKey: ["/api/conversations", committeeConversation?.id, "messages"],
+    enabled: !!committeeConversation,
+    refetchInterval: 3000,
+  });
+
+  // Auto-mark messages as read when viewing committee
+  useAutoMarkAsRead(committee, messages, !!committee);
+
   const sendMessageMutation = useMutation({
-    mutationFn: async (data: { content: string; committee: string; sender: string }) => {
-      return await apiRequest('POST', '/api/messages', data);
+    mutationFn: async (data: { content: string }) => {
+      if (!committeeConversation) throw new Error("No conversation available");
+      return await apiRequest('POST', `/api/conversations/${committeeConversation.id}/messages`, {
+        content: data.content
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`committee-messages`, committee] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", committeeConversation?.id, "messages"] });
       setNewMessage("");
     },
     onError: () => {
@@ -86,7 +105,7 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
       return await apiRequest('DELETE', `/api/messages/${messageId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/messages', committee] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", committeeConversation?.id, "messages"] });
       toast({
         title: "Message deleted",
         description: "The message has been removed",
@@ -105,9 +124,7 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
     if (!newMessage.trim()) return;
 
     sendMessageMutation.mutate({
-      content: newMessage.trim(),
-      committee: committee,
-      sender: getUserName()
+      content: newMessage.trim()
     });
   };
 
@@ -141,8 +158,8 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
                         {new Date(message.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
-                    {/* Only show delete button for user's own messages */}
-                    {message.sender === getUserName() && (
+                    {/* Show delete button for user's own messages or super admin */}
+                    {canDeleteMessage(message) && (
                       <Button
                         variant="ghost"
                         size="sm"

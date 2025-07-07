@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { z } from "zod";
-import { eq, and, or, sql } from 'drizzle-orm';
+import { eq, and, or, sql, desc } from 'drizzle-orm';
 import express from "express";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
@@ -14,7 +14,7 @@ import path from "path";
 import mammoth from "mammoth";
 import { storage } from "./storage-wrapper";
 import { sendDriverAgreementNotification } from "./sendgrid";
-import { messageNotificationRoutes } from "./routes/message-notifications-simple";
+import { messageNotificationRoutes } from "./routes/message-notifications";
 import googleSheetsRoutes from "./routes/google-sheets";
 // import { generalRateLimit, strictRateLimit, uploadRateLimit, clearRateLimit } from "./middleware/rateLimiter";
 import { sanitizeMiddleware } from "./middleware/sanitizer";
@@ -23,6 +23,7 @@ import {
   insertProjectSchema,
   insertProjectTaskSchema,
   insertProjectCommentSchema,
+  insertTaskCompletionSchema,
   insertMessageSchema,
   insertWeeklyReportSchema,
   insertSandwichCollectionSchema,
@@ -37,12 +38,13 @@ import {
   insertContactSchema,
   insertAnnouncementSchema,
   drivers,
-  messageGroups,
-  insertMessageGroupSchema,
-  groupMemberships,
-  insertGroupMembershipSchema,
-  groupMessageParticipants,
-  messages,
+  projectTasks,
+  taskCompletions,
+
+
+  conversations,
+  conversationParticipants,
+  messages as messagesTable,
   users,
 } from "@shared/schema";
 
@@ -463,6 +465,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Task completion routes for multi-user tasks
+  app.post("/api/tasks/:taskId/complete", async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      const user = req.session?.user;
+      const { notes } = req.body;
+
+      if (!user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Check if user is assigned to this task
+      const task = await storage.getTaskById(taskId);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      const assigneeIds = task.assigneeIds || [];
+      if (!assigneeIds.includes(user.id)) {
+        return res.status(403).json({ error: "You are not assigned to this task" });
+      }
+
+      // Add completion record
+      const completionData = insertTaskCompletionSchema.parse({
+        taskId: taskId,
+        userId: user.id,
+        userName: user.displayName || user.email,
+        notes: notes
+      });
+
+      const completion = await storage.createTaskCompletion(completionData);
+
+      // Check completion status
+      const allCompletions = await storage.getTaskCompletions(taskId);
+      const isFullyCompleted = allCompletions.length >= assigneeIds.length;
+
+      // If all users completed, update task status
+      if (isFullyCompleted && task.status !== 'completed') {
+        await storage.updateTaskStatus(taskId, 'completed');
+      }
+
+      res.json({ 
+        completion: completion, 
+        isFullyCompleted,
+        totalCompletions: allCompletions.length,
+        totalAssignees: assigneeIds.length
+      });
+    } catch (error) {
+      console.error("Error completing task:", error);
+      res.status(500).json({ error: "Failed to complete task" });
+    }
+  });
+
+  // Remove completion by current user
+  app.delete("/api/tasks/:taskId/complete", async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      const user = req.session?.user;
+
+      if (!user) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Remove completion record
+      const success = await storage.removeTaskCompletion(taskId, user.id);
+      if (!success) {
+        return res.status(404).json({ error: "Completion not found" });
+      }
+
+      // Update task status back to in_progress if it was completed
+      const task = await storage.getTaskById(taskId);
+      if (task?.status === 'completed') {
+        await storage.updateTaskStatus(taskId, 'in_progress');
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing completion:", error);
+      res.status(500).json({ error: "Failed to remove completion" });
+    }
+  });
+
+  // Get task completions
+  app.get("/api/tasks/:taskId/completions", async (req, res) => {
+    try {
+      const taskId = parseInt(req.params.taskId);
+      const completions = await storage.getTaskCompletions(taskId);
+      res.json(completions);
+    } catch (error) {
+      console.error("Error fetching completions:", error);
+      res.status(500).json({ error: "Failed to fetch completions" });
+    }
+  });
+
   app.put("/api/projects/:id", requirePermission("edit_data"), async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -594,14 +690,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = req.query.limit
         ? parseInt(req.query.limit as string)
         : undefined;
-      const committee = req.query.committee as string;
+      const chatType = req.query.chatType as string;
+      const committee = req.query.committee as string; // Keep for backwards compatibility
       const recipientId = req.query.recipientId as string;
       const groupId = req.query.groupId ? parseInt(req.query.groupId as string) : undefined;
       
-      console.log(`[DEBUG] API call received - committee: "${committee}", recipientId: "${recipientId}", groupId: ${groupId}`);
+      // Use chatType if provided, otherwise fall back to committee for backwards compatibility
+      const messageContext = chatType || committee;
+      console.log(`[DEBUG] API call received - chatType: "${chatType}", committee: "${committee}", recipientId: "${recipientId}", groupId: ${groupId}`);
 
       let messages;
-      if (committee === "direct" && recipientId) {
+      if (messageContext === "direct" && recipientId) {
         // For direct messages, get conversations between current user and recipient
         const currentUserId = (req as any).user?.id;
         console.log(`[DEBUG] Direct messages requested - currentUserId: ${currentUserId}, recipientId: ${recipientId}`);
@@ -611,7 +710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         messages = await storage.getDirectMessages(currentUserId, recipientId);
         console.log(`[DEBUG] Direct messages found: ${messages.length} messages`);
       } else if (groupId) {
-        // For group messages, verify user membership first
+        // For group messages, use proper thread-based filtering
         const currentUserId = (req as any).user?.id;
         if (!currentUserId) {
           console.log(`[DEBUG] No user authentication found for group ${groupId} request`);
@@ -639,11 +738,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         console.log(`[DEBUG] User ${currentUserId} verified as member of group ${groupId}`);
-        // Get messages for this group using the committee format
-        messages = await storage.getMessagesByCommittee(`group_${groupId}`);
-        console.log(`[DEBUG] Group messages found: ${messages.length} messages`);
-      } else if (committee) {
-        messages = await storage.getMessagesByCommittee(committee);
+        
+        // Get the conversation thread ID for this group
+        const thread = await db
+          .select()
+          .from(conversationThreads)
+          .where(
+            and(
+              eq(conversationThreads.type, "group"),
+              eq(conversationThreads.referenceId, groupId.toString()),
+              eq(conversationThreads.isActive, true)
+            )
+          )
+          .limit(1);
+          
+        if (thread.length === 0) {
+          console.log(`[DEBUG] No conversation thread found for group ${groupId}`);
+          return res.json([]); // Return empty array if no thread exists
+        }
+        
+        const threadId = thread[0].id;
+        console.log(`[DEBUG] Using thread ID ${threadId} for group ${groupId}`);
+        
+        // Get messages for this specific thread
+        const messageResults = await db
+          .select()
+          .from(messagesTable)
+          .where(eq(messagesTable.threadId, threadId))
+          .orderBy(messagesTable.timestamp);
+        messages = messageResults;
+          
+        console.log(`[DEBUG] Group messages found: ${messages.length} messages for thread ${threadId}`);
+      } else if (messageContext) {
+        // For chat types, use thread-based filtering
+        const thread = await db
+          .select()
+          .from(conversationThreads)
+          .where(
+            and(
+              eq(conversationThreads.type, "chat"),
+              eq(conversationThreads.referenceId, messageContext),
+              eq(conversationThreads.isActive, true)
+            )
+          )
+          .limit(1);
+          
+        if (thread.length > 0) {
+          const threadId = thread[0].id;
+          console.log(`[DEBUG] Using thread ID ${threadId} for chat type ${messageContext}`);
+          
+          const messageResults = await db
+            .select()
+            .from(messagesTable)
+            .where(eq(messagesTable.threadId, threadId))
+            .orderBy(messagesTable.timestamp);
+          messages = messageResults;
+        } else {
+          // FIXED: Use storage layer to create thread instead of legacy committee filtering
+          console.log(`❌ CRITICAL: No thread found for chat type ${messageContext}, creating via storage layer`);
+          const threadId = await storage.getOrCreateThreadId(messageContext);
+          console.log(`✅ Created threadId ${threadId} for ${messageContext} via storage layer`);
+          messages = await storage.getMessagesByThreadId(threadId);
+        }
       } else {
         messages = limit
           ? await storage.getRecentMessages(limit)
@@ -661,11 +817,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const messageData = insertMessageSchema.parse(req.body);
       // Add user ID to message data if user is authenticated
+      // ENHANCED: Add debug logging for message creation
       const messageWithUser = {
         ...messageData,
         userId: req.user?.id || null,
       };
+      console.log(`📤 CREATING MESSAGE: committee=${messageData.committee}, threadId=${messageData.threadId}, userId=${req.user?.id}`);
       const message = await storage.createMessage(messageWithUser);
+      console.log(`✅ MESSAGE CREATED: id=${message.id}, threadId=${message.threadId}`);
       
       // Broadcast new message notification to connected clients  
       if (typeof (global as any).broadcastNewMessage === 'function') {
@@ -677,6 +836,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(400).json({ message: "Invalid message data" });
     }
   });
+
+  // REMOVED OLD ENDPOINT - using new conversation system instead
 
   app.delete("/api/messages/:id", requirePermission("send_messages"), async (req, res) => {
     try {
@@ -693,8 +854,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Message not found" });
       }
 
-      // Check if user owns the message or is admin
-      if (message.userId !== req.user.id && req.user.role !== "admin") {
+      // Check if user owns the message or has admin privileges
+      const user = req.user as any;
+      const isOwner = message.userId === user.id;
+      const isSuperAdmin = user.role === "super_admin";
+      const isAdmin = user.role === "admin";
+      const hasModeratePermission = user.permissions?.includes("moderate_messages");
+      
+      if (!isOwner && !isSuperAdmin && !isAdmin && !hasModeratePermission) {
         return res
           .status(403)
           .json({ message: "You can only delete your own messages" });
@@ -4609,14 +4776,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         createdBy: userId,
       }).returning();
       
-      // Add creator as admin
+      // Create a conversation thread for this group
+      const [thread] = await db.insert(conversationThreads).values({
+        type: 'group',
+        referenceId: group.id.toString(),
+        title: name.trim(),
+        isActive: true,
+        createdBy: userId
+      }).returning();
+      
+      console.log(`[DEBUG] Created thread ${thread.id} for group ${group.id} (${name})`);
+      
+      // Add creator as admin to group membership
       await db.insert(groupMemberships).values({
         groupId: group.id,
         userId: userId,
         role: 'admin'
       });
       
-      // Add other members
+      // Add creator as participant to thread
+      await db.insert(groupMessageParticipants).values({
+        threadId: thread.id,
+        userId: userId,
+        status: 'active',
+        joinedAt: new Date()
+      });
+      
+      // Add other members to both group and thread
       if (memberIds && Array.isArray(memberIds)) {
         const memberships = memberIds
           .filter(id => id !== userId) // Don't duplicate creator
@@ -4626,13 +4812,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: 'member' as const
           }));
         
+        const participants = memberIds
+          .filter(id => id !== userId) // Don't duplicate creator
+          .map(memberId => ({
+            threadId: thread.id,
+            userId: memberId,
+            status: 'active' as const,
+            joinedAt: new Date()
+          }));
+        
         if (memberships.length > 0) {
           await db.insert(groupMemberships).values(memberships);
+          await db.insert(groupMessageParticipants).values(participants);
         }
       }
       
-      res.status(201).json(group);
+      // Send welcome message notification
+      if ((global as any).broadcastNewMessage) {
+        (global as any).broadcastNewMessage({
+          content: `Welcome to ${name}! This group has been created for team collaboration.`,
+          sender: 'System',
+          threadId: thread.id,
+          timestamp: new Date()
+        });
+      }
+      
+      res.status(201).json({ ...group, threadId: thread.id });
     } catch (error) {
+      console.error("Error creating message group:", error);
       res.status(500).json({ message: "Failed to create message group" });
     }
   });
@@ -4642,24 +4849,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { groupId } = req.params;
       const { memberIds } = req.body;
-      const userId = (req as any).user?.id;
+      const currentUser = (req as any).user;
+      const userId = currentUser?.id;
       
-      // Check if user is admin of the group
-      const userMembership = await db
-        .select()
-        .from(groupMemberships)
-        .where(
-          and(
-            eq(groupMemberships.groupId, parseInt(groupId)),
-            eq(groupMemberships.userId, userId),
-            eq(groupMemberships.role, 'admin'),
-            eq(groupMemberships.isActive, true)
+      // Platform super admins can add members to any group
+      const isPlatformSuperAdmin = currentUser?.role === 'super_admin';
+      
+      if (!isPlatformSuperAdmin) {
+        // Check if user is admin of the group
+        const userMembership = await db
+          .select()
+          .from(groupMemberships)
+          .where(
+            and(
+              eq(groupMemberships.groupId, parseInt(groupId)),
+              eq(groupMemberships.userId, userId),
+              eq(groupMemberships.role, 'admin'),
+              eq(groupMemberships.isActive, true)
+            )
           )
-        )
-        .limit(1);
-      
-      if (userMembership.length === 0) {
-        return res.status(403).json({ message: "Only group admins can add members" });
+          .limit(1);
+        
+        if (userMembership.length === 0) {
+          return res.status(403).json({ message: "Only group admins can add members" });
+        }
       }
       
       if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
@@ -4703,22 +4916,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const groupId = parseInt(req.params.groupId);
       const userId = (req as any).user?.id;
+      const user = (req as any).user;
       
-      // Verify user is member of this group
-      const membership = await db
-        .select()
-        .from(groupMemberships)
-        .where(
-          and(
-            eq(groupMemberships.groupId, groupId),
-            eq(groupMemberships.userId, userId),
-            eq(groupMemberships.isActive, true)
+      // Check if user has moderation permissions (super_admin or admin with moderate_messages)
+      const canModerateMessages = user.role === 'super_admin' || 
+        (user.permissions && user.permissions.includes('moderate_messages'));
+      
+      if (!canModerateMessages) {
+        // Regular users need to be members of the group
+        const membership = await db
+          .select()
+          .from(groupMemberships)
+          .where(
+            and(
+              eq(groupMemberships.groupId, groupId),
+              eq(groupMemberships.userId, userId),
+              eq(groupMemberships.isActive, true)
+            )
           )
-        )
-        .limit(1);
-      
-      if (membership.length === 0) {
-        return res.status(403).json({ message: "Not a member of this group" });
+          .limit(1);
+        
+        if (membership.length === 0) {
+          return res.status(403).json({ message: "Not a member of this group" });
+        }
       }
       
       // Get all group members with user details
@@ -4883,31 +5103,338 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const groupId = parseInt(req.params.groupId);
       const userId = (req as any).user?.id;
       
+      // Get the thread ID for this group
+      const [thread] = await db
+        .select({ threadId: conversationThreads.id })
+        .from(conversationThreads)
+        .where(
+          and(
+            eq(conversationThreads.type, 'group'),
+            eq(conversationThreads.referenceId, groupId.toString()),
+            eq(conversationThreads.isActive, true)
+          )
+        );
+      
+      if (!thread) {
+        console.log(`[DEBUG] No thread found for group ${groupId}`);
+        return res.json([]);
+      }
+      
       // Check if user has access to this thread (not left)
       const participantStatus = await db
         .select({ status: groupMessageParticipants.status })
         .from(groupMessageParticipants)
         .where(
           and(
-            eq(groupMessageParticipants.threadId, groupId),
+            eq(groupMessageParticipants.threadId, thread.threadId),
             eq(groupMessageParticipants.userId, userId)
           )
         );
       
       if (participantStatus.length === 0 || participantStatus[0].status === 'left') {
+        console.log(`[DEBUG] User ${userId} has no access to thread ${thread.threadId} for group ${groupId}`);
         return res.json([]); // Return empty array for users who left
       }
       
       // Get messages from the thread
       const groupMessages = await db
         .select()
-        .from(messages)
-        .where(eq(messages.threadId, groupId))
-        .orderBy(messages.timestamp);
+        .from(messagesTable)
+        .where(eq(messagesTable.threadId, thread.threadId))
+        .orderBy(messagesTable.timestamp);
       
+      console.log(`[DEBUG] Found ${groupMessages.length} messages for group ${groupId} thread ${thread.threadId}`);
       res.json(groupMessages);
     } catch (error) {
+      console.error("Error fetching group messages:", error);
       res.status(500).json({ message: "Failed to fetch group messages" });
+    }
+  });
+
+  // POST endpoint for sending messages to group threads
+  app.post("/api/message-groups/:groupId/messages", isAuthenticated, async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const userId = (req as any).user?.id;
+      const { content, sender } = req.body;
+
+      if (!content?.trim()) {
+        return res.status(400).json({ message: "Message content is required" });
+      }
+
+      // Get the thread ID for this group
+      const [thread] = await db
+        .select({ threadId: conversationThreads.id })
+        .from(conversationThreads)
+        .where(
+          and(
+            eq(conversationThreads.type, 'group'),
+            eq(conversationThreads.referenceId, groupId.toString()),
+            eq(conversationThreads.isActive, true)
+          )
+        );
+
+      if (!thread) {
+        return res.status(404).json({ message: "Group thread not found" });
+      }
+
+      // Check if user has access to this thread
+      const participantStatus = await db
+        .select({ status: groupMessageParticipants.status })
+        .from(groupMessageParticipants)
+        .where(
+          and(
+            eq(groupMessageParticipants.threadId, thread.threadId),
+            eq(groupMessageParticipants.userId, userId)
+          )
+        );
+
+      if (participantStatus.length === 0 || participantStatus[0].status === 'left') {
+        return res.status(403).json({ message: "Not authorized to send messages to this group" });
+      }
+
+      // Insert the message
+      const [message] = await db.insert(messagesTable).values({
+        content: content.trim(),
+        sender: sender || "Anonymous",
+        userId: userId,
+        threadId: thread.threadId,
+        timestamp: new Date()
+      }).returning();
+
+      // Update thread's last message timestamp
+      await db.update(conversationThreads)
+        .set({ lastMessageAt: new Date() })
+        .where(eq(conversationThreads.id, thread.threadId));
+
+      console.log(`[DEBUG] Message sent to group ${groupId} thread ${thread.threadId}`);
+      
+      // Broadcast notification via WebSocket
+      broadcastMessage({
+        type: 'group_message',
+        groupId: groupId,
+        threadId: thread.threadId,
+        message: message
+      });
+
+      res.json(message);
+    } catch (error) {
+      console.error("Error sending group message:", error);
+      res.status(500).json({ message: "Failed to send message" });
+    }
+  });
+
+
+
+  // Remove member from group endpoint
+  app.delete("/api/message-groups/:groupId/members/:userId", isAuthenticated, async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const targetUserId = req.params.userId;
+      const currentUserId = (req as any).user?.id;
+
+      // Platform super admin can manage any group, otherwise check group admin permission
+      const currentUser = (req as any).user;
+      const isPlatformSuperAdmin = currentUser?.role === 'super_admin';
+      
+      console.log(`[DEBUG] Delete member - Current user:`, JSON.stringify(currentUser, null, 2));
+      console.log(`[DEBUG] Delete member - isPlatformSuperAdmin:`, isPlatformSuperAdmin);
+      console.log(`[DEBUG] Delete member - User role check:`, currentUser?.role);
+      console.log(`[DEBUG] Delete member - User role === 'super_admin':`, currentUser?.role === 'super_admin');
+      
+      if (!isPlatformSuperAdmin) {
+        const membership = await db
+          .select({ role: groupMemberships.role })
+          .from(groupMemberships)
+          .where(
+            and(
+              eq(groupMemberships.groupId, groupId),
+              eq(groupMemberships.userId, currentUserId),
+              eq(groupMemberships.isActive, true)
+            )
+          );
+
+        if (membership.length === 0 || membership[0].role !== 'admin') {
+          return res.status(403).json({ message: "Only group admins can remove members" });
+        }
+      }
+
+      // Only prevent removing other admins if current user is not a platform super admin
+      if (!isPlatformSuperAdmin) {
+        const targetMembership = await db
+          .select({ role: groupMemberships.role })
+          .from(groupMemberships)
+          .where(
+            and(
+              eq(groupMemberships.groupId, groupId),
+              eq(groupMemberships.userId, targetUserId),
+              eq(groupMemberships.isActive, true)
+            )
+          );
+
+        if (targetMembership.length > 0 && targetMembership[0].role === 'admin') {
+          return res.status(403).json({ message: "Cannot remove group administrators" });
+        }
+      }
+
+      // Get the thread for this group
+      const [thread] = await db
+        .select({ threadId: conversationThreads.id })
+        .from(conversationThreads)
+        .where(
+          and(
+            eq(conversationThreads.type, 'group'),
+            eq(conversationThreads.referenceId, groupId.toString()),
+            eq(conversationThreads.isActive, true)
+          )
+        );
+
+      if (thread) {
+        // Update thread participant status to 'left'
+        await db.update(groupMessageParticipants)
+          .set({ status: 'left' })
+          .where(
+            and(
+              eq(groupMessageParticipants.threadId, thread.threadId),
+              eq(groupMessageParticipants.userId, targetUserId)
+            )
+          );
+      }
+
+      // Remove from group membership
+      await db.update(groupMemberships)
+        .set({ isActive: false })
+        .where(
+          and(
+            eq(groupMemberships.groupId, groupId),
+            eq(groupMemberships.userId, targetUserId)
+          )
+        );
+
+      console.log(`[DEBUG] Removed user ${targetUserId} from group ${groupId}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error removing member from group:", error);
+      res.status(500).json({ message: "Failed to remove member" });
+    }
+  });
+
+  // Update member role in group (promote/demote)
+  app.patch("/api/message-groups/:groupId/members/:userId/role", isAuthenticated, async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const targetUserId = req.params.userId;
+      const currentUserId = (req as any).user?.id;
+      const { role } = req.body;
+      const currentUser = (req as any).user;
+
+      if (!role || !['admin', 'member'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role. Must be 'admin' or 'member'" });
+      }
+
+      // Platform super admin can manage any group, otherwise check group admin permission
+      const isPlatformSuperAdmin = currentUser?.role === 'super_admin';
+      
+      if (!isPlatformSuperAdmin) {
+        const membership = await db
+          .select({ role: groupMemberships.role })
+          .from(groupMemberships)
+          .where(
+            and(
+              eq(groupMemberships.groupId, groupId),
+              eq(groupMemberships.userId, currentUserId),
+              eq(groupMemberships.isActive, true)
+            )
+          );
+
+        if (membership.length === 0 || membership[0].role !== 'admin') {
+          return res.status(403).json({ message: "Only group admins can manage member roles" });
+        }
+      }
+
+      // Update the member's role
+      await db.update(groupMemberships)
+        .set({ role })
+        .where(
+          and(
+            eq(groupMemberships.groupId, groupId),
+            eq(groupMemberships.userId, targetUserId),
+            eq(groupMemberships.isActive, true)
+          )
+        );
+
+      console.log(`[DEBUG] Updated user ${targetUserId} role to ${role} in group ${groupId}`);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error updating member role:", error);
+      res.status(500).json({ message: "Failed to update member role" });
+    }
+  });
+
+  // Delete entire group message thread (super admin only)
+  app.delete("/api/message-groups/:groupId", isAuthenticated, async (req, res) => {
+    try {
+      const groupId = parseInt(req.params.groupId);
+      const currentUser = (req as any).user;
+
+      console.log(`[DEBUG] Attempting to delete group ${groupId} by user ${currentUser?.id} with role ${currentUser?.role}`);
+
+      // Only platform super admins can delete entire groups
+      if (currentUser?.role !== 'super_admin') {
+        return res.status(403).json({ message: "Only platform super admins can delete message groups" });
+      }
+
+      // Sequential deletion (Neon HTTP doesn't support transactions)
+      
+      // 1. Get the conversation thread for this group
+      const [thread] = await db
+        .select({ threadId: conversationThreads.id })
+        .from(conversationThreads)
+        .where(
+          and(
+            eq(conversationThreads.type, 'group'),
+            eq(conversationThreads.referenceId, groupId.toString()),
+            eq(conversationThreads.isActive, true)
+          )
+        );
+
+      console.log(`[DEBUG] Found thread for group ${groupId}:`, thread);
+
+      if (thread) {
+        // 2. Delete all messages in the thread (use messagesTable alias)
+        const deletedMessages = await db.delete(messagesTable)
+          .where(eq(messagesTable.threadId, thread.threadId));
+        console.log(`[DEBUG] Deleted messages in thread ${thread.threadId}`);
+
+        // 3. Delete all thread participants
+        const deletedParticipants = await db.delete(groupMessageParticipants)
+          .where(eq(groupMessageParticipants.threadId, thread.threadId));
+        console.log(`[DEBUG] Deleted participants for thread ${thread.threadId}`);
+
+        // 4. Mark conversation thread as inactive
+        await db.update(conversationThreads)
+          .set({ isActive: false })
+          .where(eq(conversationThreads.id, thread.threadId));
+        console.log(`[DEBUG] Marked thread ${thread.threadId} as inactive`);
+      }
+
+      // 5. Delete all group memberships
+      const deletedMemberships = await db.delete(groupMemberships)
+        .where(eq(groupMemberships.groupId, groupId));
+      console.log(`[DEBUG] Deleted memberships for group ${groupId}`);
+
+      // 6. Mark the group as inactive
+      await db.update(messageGroups)
+        .set({ isActive: false })
+        .where(eq(messageGroups.id, groupId));
+      console.log(`[DEBUG] Marked group ${groupId} as inactive`);
+
+      console.log(`[DEBUG] Super admin successfully deleted entire group ${groupId}`);
+      res.json({ success: true, message: "Group deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting group:", error);
+      console.error("Full error details:", error.message, error.stack);
+      res.status(500).json({ message: `Failed to delete group: ${error.message}` });
     }
   });
 
@@ -5104,8 +5631,358 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Make broadcast function available globally for use in message routes
+  // Task assignment notification broadcasting function
+  const broadcastTaskAssignment = (userId: string, notificationData: any) => {
+    try {
+      console.log(`Broadcasting task assignment notification to user: ${userId}`);
+      const userClients = connectedClients.get(userId);
+      
+      if (userClients) {
+        let sentCount = 0;
+        userClients.forEach(client => {
+          if (client.readyState === WebSocket.OPEN) {
+            console.log('Sending task assignment notification to client:', notificationData);
+            client.send(JSON.stringify({
+              type: 'notification',
+              data: notificationData
+            }));
+            sentCount++;
+          }
+        });
+        console.log(`Sent task assignment notification to ${sentCount} clients for user ${userId}`);
+      } else {
+        console.log(`No connected clients found for user ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error broadcasting task assignment notification:', error);
+    }
+  };
+
+  // Notification API endpoints
+  app.get("/api/notifications", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = (req as any).user; // Standardized authentication
+      const notifications = await storage.getUserNotifications(user.id);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", isAuthenticated, async (req: any, res) => {
+    try {
+      const notificationId = parseInt(req.params.id);
+      const success = await storage.markNotificationAsRead(notificationId);
+      if (!success) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  app.patch("/api/notifications/mark-all-read", isAuthenticated, async (req: any, res) => {
+    try {
+      const user = (req as any).user; // Standardized authentication
+      const success = await storage.markAllNotificationsAsRead(user.id);
+      res.json({ success });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "Failed to mark all notifications as read" });
+    }
+  });
+
+  // Simple conversation API endpoints for the new 3-table messaging system
+  app.get("/api/conversations", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user?.id) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      // Get conversations the user is a participant in
+      let userConversations;
+      // Get all channel conversations (these are public) and user's private conversations
+      userConversations = await db
+        .select({
+          id: conversations.id,
+          type: conversations.type,
+          name: conversations.name,
+          createdAt: conversations.createdAt
+        })
+        .from(conversations)
+        .leftJoin(conversationParticipants, eq(conversations.id, conversationParticipants.conversationId))
+        .where(
+          or(
+            eq(conversations.type, 'channel'), // All channel conversations are accessible
+            eq(conversationParticipants.userId, user.id) // User's private conversations
+          )
+        )
+        .groupBy(conversations.id, conversations.type, conversations.name, conversations.createdAt)
+        .orderBy(desc(conversations.createdAt));
+
+      res.json(userConversations);
+    } catch (error) {
+      console.error('[API] Error fetching conversations:', error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/conversations", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user?.id) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const { type, name, participants = [] } = req.body;
+
+      // Create conversation
+      const [conversation] = await db
+        .insert(conversations)
+        .values({
+          type,
+          name: name || null
+        })
+        .returning();
+
+      // Add participants
+      const participantData = participants.map((userId: string) => ({
+        conversationId: conversation.id,
+        userId
+      }));
+
+      if (participantData.length > 0) {
+        await db.insert(conversationParticipants).values(participantData);
+      }
+
+      res.json(conversation);
+    } catch (error) {
+      console.error('[API] Error creating conversation:', error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/conversations/:id/messages", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user?.id) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const conversationId = parseInt(req.params.id);
+
+      // Check access: participant in conversation OR channel conversations are public
+      const [conversation] = await db
+        .select({ type: conversations.type })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId));
+
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+
+      // Channel conversations are accessible to all users
+      if (conversation.type !== 'channel') {
+        const [participant] = await db
+          .select()
+          .from(conversationParticipants)
+          .where(
+            and(
+              eq(conversationParticipants.conversationId, conversationId),
+              eq(conversationParticipants.userId, user.id)
+            )
+          );
+
+        if (!participant) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const conversationMessages = await db
+        .select({
+          id: messagesTable.id,
+          content: messagesTable.content,
+          userId: messagesTable.userId,
+          sender: messagesTable.sender,
+          createdAt: messagesTable.createdAt,
+          updatedAt: messagesTable.updatedAt
+        })
+        .from(messagesTable)
+        .where(eq(messagesTable.conversationId, conversationId))
+        .orderBy(asc(messagesTable.createdAt));
+
+      // Transform to match expected format
+      const formattedMessages = conversationMessages.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        userId: msg.userId,
+        sender: msg.sender || 'Unknown User',
+        timestamp: msg.createdAt,
+        committee: 'conversation' // For compatibility
+      }));
+
+      res.json(formattedMessages);
+    } catch (error) {
+      console.error('[API] Error fetching messages:', error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/conversations/:id/messages", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user?.id) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      const conversationId = parseInt(req.params.id);
+      const { content } = req.body;
+
+      if (!content || !content.trim()) {
+        return res.status(400).json({ message: "Message content is required" });
+      }
+
+      // Check access: participant in conversation OR channel conversations are public
+      const [conversation] = await db
+        .select({ type: conversations.type })
+        .from(conversations)
+        .where(eq(conversations.id, conversationId));
+
+      if (!conversation) {
+        return res.status(404).json({ message: "Conversation not found" });
+      }
+
+      // Channel conversations are accessible to all users
+      if (conversation.type !== 'channel') {
+        const [participant] = await db
+          .select()
+          .from(conversationParticipants)
+          .where(
+            and(
+              eq(conversationParticipants.conversationId, conversationId),
+              eq(conversationParticipants.userId, user.id)
+            )
+          );
+
+        if (!participant) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const userName = `${user.firstName} ${user.lastName}` || user.email || 'Unknown User';
+
+      const [message] = await db
+        .insert(messagesTable)
+        .values({
+          conversationId,
+          userId: user.id,
+          content: content.trim(),
+          sender: userName,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+        .returning();
+
+      // Broadcast via WebSocket if available
+      if (broadcastNewMessage) {
+        broadcastNewMessage({
+          type: 'new_message',
+          conversationId,
+          message: {
+            id: message.id,
+            content: message.content,
+            userId: message.userId,
+            sender: userName,
+            timestamp: message.createdAt
+          }
+        });
+      }
+
+      res.json(message);
+    } catch (error) {
+      console.error('[API] Error sending message:', error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Create or get direct conversation between two users
+  app.post("/api/conversations/direct", isAuthenticated, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const { otherUserId } = req.body;
+
+      if (!otherUserId) {
+        return res.status(400).json({ message: "Other user ID is required" });
+      }
+
+      // Check if direct conversation already exists between these users
+      const existingConversation = await db
+        .select({
+          id: conversations.id,
+          type: conversations.type,
+          name: conversations.name,
+          createdAt: conversations.createdAt
+        })
+        .from(conversations)
+        .innerJoin(conversationParticipants, eq(conversations.id, conversationParticipants.conversationId))
+        .where(
+          and(
+            eq(conversations.type, 'direct'),
+            eq(conversationParticipants.userId, user.id)
+          )
+        );
+
+      // Find conversation that includes both users
+      for (const conv of existingConversation) {
+        const participants = await db
+          .select({ userId: conversationParticipants.userId })
+          .from(conversationParticipants)
+          .where(eq(conversationParticipants.conversationId, conv.id));
+        
+        const userIds = participants.map(p => p.userId);
+        if (userIds.includes(otherUserId) && userIds.length === 2) {
+          return res.json(conv);
+        }
+      }
+
+      // Create new direct conversation
+      const [newConversation] = await db
+        .insert(conversations)
+        .values({
+          type: 'direct',
+          name: null,
+          createdAt: new Date().toISOString()
+        })
+        .returning();
+
+      // Add both users as participants
+      await db.insert(conversationParticipants).values([
+        {
+          conversationId: newConversation.id,
+          userId: user.id,
+          joinedAt: new Date().toISOString()
+        },
+        {
+          conversationId: newConversation.id,
+          userId: otherUserId,
+          joinedAt: new Date().toISOString()
+        }
+      ]);
+
+      res.json(newConversation);
+    } catch (error) {
+      console.error('[API] Error creating direct conversation:', error);
+      res.status(500).json({ message: "Failed to create conversation" });
+    }
+  });
+
+  // Make broadcast functions available globally for use in other routes
   (global as any).broadcastNewMessage = broadcastNewMessage;
+  (global as any).broadcastTaskAssignment = broadcastTaskAssignment;
 
   return httpServer;
 }

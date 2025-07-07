@@ -10,16 +10,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useMessageReads } from "@/hooks/useMessageReads";
 import { hasPermission, PERMISSIONS } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface Message {
   id: number;
-  sender: string;
   userId: string;
   content: string;
-  timestamp: string;
-  committee: string;
+  createdAt: string;
+  conversationId: number;
 }
 
 export default function CoreTeamChat() {
@@ -30,6 +30,41 @@ export default function CoreTeamChat() {
   
   // Only allow users with core team chat access
   const hasCoreTeamAccess = hasPermission(user, 'core_team_chat');
+  
+  // Initialize read tracking hook
+  const { useAutoMarkAsRead } = useMessageReads();
+
+  // Fetch all users for name lookups
+  const { data: allUsers = [] } = useQuery({
+    queryKey: ["/api/users"],
+  });
+
+  // Helper functions for user display
+  const getUserDisplayName = (userId: string) => {
+    const userFound = allUsers.find((u: any) => u.id === userId);
+    if (userFound) {
+      if (userFound.displayName) return userFound.displayName;
+      if (userFound.firstName) return userFound.firstName;
+      if (userFound.email) return userFound.email.split('@')[0];
+    }
+    return 'Team Member';
+  };
+
+  const getUserInitials = (userId: string) => {
+    const userFound = allUsers.find((u: any) => u.id === userId);
+    if (userFound) {
+      if (userFound.firstName && userFound.lastName) {
+        return (userFound.firstName[0] + userFound.lastName[0]).toUpperCase();
+      }
+      if (userFound.firstName) {
+        return userFound.firstName[0].toUpperCase();
+      }
+      if (userFound.email) {
+        return userFound.email[0].toUpperCase();
+      }
+    }
+    return 'TM';
+  };
   
   if (!hasCoreTeamAccess) {
     return (
@@ -50,20 +85,41 @@ export default function CoreTeamChat() {
     );
   }
 
-  // Fetch core team messages
-  const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: ["/api/messages", "core_team"],
-    queryFn: () => fetch("/api/messages?committee=core_team").then(res => res.json()),
-    refetchInterval: 2000, // Refresh every 2 seconds for real-time feel
+  // Get Core Team conversation ID  
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["/api/conversations"],
+    enabled: !!user,
   });
+  
+  const coreTeamConversation = conversations.find(c => c.type === 'channel' && c.name === 'Core Team');
+
+  // Fetch core team messages from the new conversation system
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ["/api/conversations", coreTeamConversation?.id, "messages"],
+    enabled: !!coreTeamConversation,
+    refetchInterval: 3000,
+  });
+
+  // Auto-mark messages as read when viewing
+  useAutoMarkAsRead("core_team", messages, hasCoreTeamAccess);
+  
+  // Mark messages as read when conversation is selected
+  useEffect(() => {
+    if (coreTeamConversation && messages.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages/unread-counts"] });
+    }
+  }, [coreTeamConversation, messages.length, queryClient]);
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async (newMessage: { sender: string; content: string; committee: string; userId?: string }) => {
-      return await apiRequest('POST', '/api/messages', newMessage);
+    mutationFn: async (content: string) => {
+      if (!coreTeamConversation) throw new Error("Core Team conversation not found");
+      return await apiRequest('POST', `/api/conversations/${coreTeamConversation.id}/messages`, {
+        content
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/messages", "core_team"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", coreTeamConversation?.id, "messages"] });
       setMessage("");
     },
     onError: () => {
@@ -98,18 +154,9 @@ export default function CoreTeamChat() {
   }, [messages]);
 
   const handleSendMessage = () => {
-    if (!message.trim()) return;
-
-    const userName = (user as any)?.firstName && (user as any)?.lastName 
-      ? `${(user as any).firstName} ${(user as any).lastName}` 
-      : (user as any)?.email || "Core Team Member";
-
-    sendMessageMutation.mutate({
-      sender: userName,
-      content: message.trim(),
-      committee: "core_team",
-      userId: (user as any)?.id
-    });
+    if (!message.trim() || !coreTeamConversation) return;
+    
+    sendMessageMutation.mutate(message.trim());
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -189,7 +236,7 @@ export default function CoreTeamChat() {
                   <div key={msg.id} className="flex items-start space-x-3 mb-4">
                     <Avatar className="w-8 h-8">
                       <AvatarFallback className="bg-orange-100 text-orange-700 text-xs">
-                        {msg.sender.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        {getUserInitials(msg.userId)}
                       </AvatarFallback>
                     </Avatar>
                     
@@ -197,38 +244,45 @@ export default function CoreTeamChat() {
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center space-x-2">
                           <span className="font-medium text-sm text-slate-900">
-                            {msg.sender}
+                            {getUserDisplayName(msg.userId)}
                           </span>
                           <Badge variant="secondary" className="text-xs">
                             <Crown className="w-3 h-3 mr-1" />
                             Admin
                           </Badge>
                           <span className="text-xs text-slate-500">
-                            {formatTime(msg.timestamp)}
+                            {new Date(msg.createdAt || msg.timestamp).toLocaleTimeString('en-US', { 
+                              hour: 'numeric', 
+                              minute: '2-digit', 
+                              hour12: true 
+                            })}
                           </span>
                         </div>
                         
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 w-6 p-0 hover:bg-orange-100"
-                            >
-                              <MoreVertical className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => deleteMessageMutation.mutate(msg.id)}
-                              className="text-red-600 hover:text-red-700"
-                              disabled={deleteMessageMutation.isPending}
-                            >
-                              <Trash2 className="h-3 w-3 mr-2" />
-                              Delete Message
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                        {/* Show dropdown only for message owner or moderators */}
+                        {(msg.userId === user?.id || hasPermission(user, 'moderate_messages')) && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 hover:bg-orange-100"
+                              >
+                                <MoreVertical className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => deleteMessageMutation.mutate(msg.id)}
+                                className="text-red-600 hover:text-red-700"
+                                disabled={deleteMessageMutation.isPending}
+                              >
+                                <Trash2 className="h-3 w-3 mr-2" />
+                                Delete Message
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
                       
                       <div className="bg-orange-50 border border-orange-200 rounded-lg p-3">

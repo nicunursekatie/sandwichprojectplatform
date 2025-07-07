@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useMessageReads } from "@/hooks/useMessageReads";
 import type { Host, Message } from "@shared/schema";
 
 interface HostWithContacts extends Host {
@@ -22,6 +23,9 @@ export default function HostChat() {
   const [selectedHost, setSelectedHost] = useState<Host | null>(null);
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  // Initialize read tracking hook
+  const { useAutoMarkAsRead } = useMessageReads();
 
   // Get user profile for display name
   const { data: userProfile } = useQuery({
@@ -46,27 +50,58 @@ export default function HostChat() {
     return 'Team Member';
   };
 
+  const canDeleteMessage = (message: Message) => {
+    const currentUser = user as any;
+    const isOwner = message.sender === getUserName();
+    const isSuperAdmin = currentUser?.role === "super_admin";
+    const isAdmin = currentUser?.role === "admin";
+    const hasModeratePermission = currentUser?.permissions?.includes("moderate_messages");
+    
+    return isOwner || isSuperAdmin || isAdmin || hasModeratePermission;
+  };
+
   const { data: hosts = [] } = useQuery<HostWithContacts[]>({
     queryKey: ['/api/hosts-with-contacts'],
   });
 
-  const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: ['/api/messages', 'host', selectedHost?.id],
+  // Get or create host conversation
+  const { data: hostConversation } = useQuery({
+    queryKey: ["/api/conversations/host", selectedHost?.id],
     queryFn: async () => {
-      if (!selectedHost) return [];
-      const response = await fetch(`/api/messages?committee=host-${selectedHost.id}`);
-      if (!response.ok) return [];
-      return response.json();
+      if (!selectedHost) return null;
+      const response = await apiRequest('POST', '/api/conversations', {
+        type: 'host',
+        name: `${selectedHost.name} Host Chat`,
+        metadata: { hostId: selectedHost.id }
+      });
+      return response;
     },
-    enabled: !!selectedHost
+    enabled: !!selectedHost,
   });
 
+  // Fetch messages for host conversation
+  const { data: messages = [] } = useQuery<Message[]>({
+    queryKey: ["/api/conversations", hostConversation?.id, "messages"],
+    enabled: !!hostConversation,
+    refetchInterval: 3000,
+  });
+
+  // Auto-mark messages as read when viewing host chat
+  useAutoMarkAsRead(
+    selectedHost ? `host-${selectedHost.id}` : "", 
+    messages, 
+    !!selectedHost
+  );
+
   const sendMessageMutation = useMutation({
-    mutationFn: async (data: { content: string; committee: string; sender: string }) => {
-      return await apiRequest('POST', '/api/messages', data);
+    mutationFn: async (data: { content: string }) => {
+      if (!hostConversation) throw new Error("No conversation available");
+      return await apiRequest('POST', `/api/conversations/${hostConversation.id}/messages`, {
+        content: data.content
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/messages', 'host', selectedHost?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", hostConversation?.id, "messages"] });
       setNewMessage("");
     },
     onError: () => {
@@ -83,7 +118,7 @@ export default function HostChat() {
       return await apiRequest('DELETE', `/api/messages/${messageId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/messages', 'host', selectedHost?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", hostConversation?.id, "messages"] });
       toast({
         title: "Message deleted",
         description: "The message has been removed",
@@ -99,12 +134,10 @@ export default function HostChat() {
   });
 
   const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedHost) return;
+    if (!newMessage.trim()) return;
 
     sendMessageMutation.mutate({
-      content: newMessage.trim(),
-      committee: `host-${selectedHost.id}`,
-      sender: getUserName()
+      content: newMessage.trim()
     });
   };
 
@@ -214,8 +247,8 @@ export default function HostChat() {
                         {new Date(message.timestamp).toLocaleTimeString()}
                       </span>
                     </div>
-                    {/* Only show delete button for user's own messages */}
-                    {message.sender === getUserName() && (
+                    {/* Show delete button for message owners or super admins */}
+                    {canDeleteMessage(message) && (
                       <Button
                         variant="ghost"
                         size="sm"
