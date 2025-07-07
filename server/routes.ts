@@ -5922,11 +5922,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const messageId = parseInt(req.params.id);
       
-      // Get the message to check ownership
-      const [message] = await db
-        .select()
-        .from(messagesTable)
-        .where(eq(messagesTable.id, messageId));
+      // Use storage wrapper instead of direct database access
+      const message = await storage.getMessageById(messageId);
 
       if (!message) {
         return res.status(404).json({ message: "Message not found" });
@@ -5941,8 +5938,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      // Delete the message
-      await db.delete(messagesTable).where(eq(messagesTable.id, messageId));
+      // Delete the message using storage wrapper
+      const deleted = await storage.deleteMessage(messageId);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Message not found" });
+      }
 
       res.status(204).send();
     } catch (error) {
