@@ -254,4 +254,3 @@ export default function ChatHub() {
     </div>
   );
 }
-```This code removes the `SimpleDirectMessaging` component and updates the direct message channel to use `GroupMessaging`.
