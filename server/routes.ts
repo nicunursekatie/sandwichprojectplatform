@@ -340,8 +340,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Import and use the new modular routes
-  const { apiRoutes } = await import("./routes/index");
-  app.use(apiRoutes);
+  const routesModule = await import("./routes/index");
+  if (routesModule.apiRoutes) {
+    app.use(routesModule.apiRoutes);
+  }
 
   // Register performance optimization routes
   registerPerformanceRoutes(app);

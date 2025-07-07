@@ -44,3 +44,5 @@ conversationsRoutes.post("/conversations", isAuthenticated, async (req, res) => 
 
 
 export { conversationsRoutes };
+export { apiRoutes };
+export default { apiRoutes };
