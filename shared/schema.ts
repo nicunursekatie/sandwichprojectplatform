@@ -90,8 +90,6 @@ export const projectTasks = pgTable("project_tasks", {
   assigneeNames: text("assignee_names").array(), // Multiple assignee names as JSON array
   dueDate: text("due_date"),
   completedAt: timestamp("completed_at"),
-  completedBy: text("completed_by"), // User ID who completed the task
-  completedByName: text("completed_by_name"), // User name who completed the task
   attachments: text("attachments"), // JSON array of file paths
   order: integer("order").notNull().default(0), // for task ordering
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -568,6 +566,3 @@ export const insertGoogleSheetSchema = createInsertSchema(googleSheets).omit({
 
 export type GoogleSheet = typeof googleSheets.$inferSelect;
 export type InsertGoogleSheet = z.infer<typeof insertGoogleSheetSchema>;
-
-// OLD MESSAGING TABLES REMOVED - Using simple 3-table system above
-// The messaging system now uses only: conversations, conversationParticipants, messages

@@ -1,13 +1,12 @@
-
 import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../storage-wrapper";
 import { isAuthenticated } from "../replitAuth";
 
-const router = Router();
+const conversationsRoutes = Router();
 
 // Example route, needs to be replaced with actual routes
-router.get("/conversations", isAuthenticated, async (req, res) => {
+conversationsRoutes.get("/conversations", isAuthenticated, async (req, res) => {
   try {
     // Placeholder logic, replace with actual data fetching
     const conversations = await storage.list("conversations");
@@ -18,7 +17,7 @@ router.get("/conversations", isAuthenticated, async (req, res) => {
   }
 });
 
-router.post("/conversations", isAuthenticated, async (req, res) => {
+conversationsRoutes.post("/conversations", isAuthenticated, async (req, res) => {
   try {
     const conversationSchema = z.object({
       participantIds: z.array(z.string()),
@@ -43,9 +42,5 @@ router.post("/conversations", isAuthenticated, async (req, res) => {
   }
 });
 
-// Define apiRoutes as the router
-const apiRoutes = router;
 
-export { router as conversationsRoutes };
-export { apiRoutes };
-export default { apiRoutes };
+export { conversationsRoutes };
