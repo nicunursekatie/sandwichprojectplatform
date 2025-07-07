@@ -55,16 +55,7 @@ export default function ChatHub() {
     });
   }
 
-  if (hasPermission(user, PERMISSIONS.COMMITTEE_CHAT)) {
-    availableChannels.push({ 
-      value: "committee", 
-      label: "Committee Chat", 
-      description: "Specific committee discussions",
-      icon: <Users className="h-4 w-4" />,
-      component: <CommitteeChat />,
-      color: "bg-primary/10 text-primary"
-    });
-  }
+  // Committee channels removed - now using conversation-based messaging
 
   if (hasPermission(user, PERMISSIONS.HOST_CHAT)) {
     availableChannels.push({ 

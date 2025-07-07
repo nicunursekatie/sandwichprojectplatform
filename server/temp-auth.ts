@@ -8,36 +8,7 @@ function getDefaultPermissionsForRole(role: string): string[] {
   return getSharedPermissions(role);
 }
 
-// Committee-specific permission checking
-export const requireCommitteeAccess = (committeeId?: string): RequestHandler => {
-  return async (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    const user = req.user;
-
-    // Admins have access to all committees
-    if (user.role === 'admin' || user.role === 'admin_coordinator' || user.role === 'admin_viewer') {
-      return next();
-    }
-
-    // For committee members, check specific committee access
-    if (user.role === 'committee_member' && committeeId) {
-      try {
-        const isMember = await storage.isUserCommitteeMember(user.id, committeeId);
-        if (!isMember) {
-          return res.status(403).json({ message: "Access denied: Not a member of this committee" });
-        }
-      } catch (error) {
-        console.error("Error checking committee membership:", error);
-        return res.status(500).json({ message: "Error verifying committee access" });
-      }
-    }
-
-    next();
-  };
-};
+// Committee code removed - using conversation-based system
 
 // Extend session and request types
 declare module 'express-session' {
@@ -776,75 +747,7 @@ export async function initializeTempAuth() {
     console.log("❌ Could not create default admin user (using fallback):", error.message);
   }
 
-  // Setup default committees and committee member user
-  try {
-    // Create default committees if they don't exist
-    try {
-      const committees = await storage.getAllCommittees();
-      if (committees.length === 0) {
-        await storage.createCommittee({ name: "Finance", description: "Financial oversight and budgeting" });
-        await storage.createCommittee({ name: "Operations", description: "Day-to-day operations management" });
-        await storage.createCommittee({ name: "Outreach", description: "Community outreach and partnerships" });
-        console.log("✅ Default committees created");
-      }
-    } catch (error) {
-      console.warn("Committee creation failed:", error.message);
-    }
-
-    // Create committee member user and assign to specific committee
-    const committeeEmail = "katielong2316@gmail.com";
-    const existingCommitteeMember = await storage.getUserByEmail(committeeEmail);
-
-    let committeeMemberId;
-    if (!existingCommitteeMember) {
-      committeeMemberId = "committee_" + Date.now();
-      await storage.createUser({
-        id: committeeMemberId,
-        email: committeeEmail,
-        firstName: "Katie",
-        lastName: "Long",
-        role: "committee_member",
-        permissions: getDefaultPermissionsForRole("committee_member"),
-        isActive: true,
-        profileImageUrl: null,
-        metadata: { password: "committee123" }
-      });
-      console.log("✅ Committee member user created: katielong2316@gmail.com / committee123");
-    } else {
-      // Use existing user without updating role (preserve current role and permissions)
-      committeeMemberId = existingCommitteeMember.id;
-      console.log("✅ Found existing user: katielong2316@gmail.com (preserving current role)");
-    }
-
-    // Assign committee member to finance committee only
-    try {
-      const katie = await storage.getUserByEmail("katielong2316@gmail.com");
-
-      if (katie) {
-        // Get Finance committee ID
-        const committees = await storage.getAllCommittees();
-        const financeCommittee = committees.find(c => c.name.toLowerCase() === "finance");
-
-        if (financeCommittee) {
-          // Check if Katie is already in Finance committee
-          const isFinanceMember = await storage.isUserCommitteeMember(katie.id, financeCommittee.id);
-          if (!isFinanceMember) {
-            await storage.addUserToCommittee({
-              userId: katie.id,
-              committeeId: financeCommittee.id,
-              role: "member"
-            });
-          }
-          console.log("✅ Assigned katielong2316@gmail.com to Finance Committee only");
-        }
-      }
-    } catch (error) {
-      console.warn("Assigning committee member failed:", error.message);
-    }
-
-  } catch (error) {
-    console.log("❌ Could not setup committees:", error.message);
-  }
+  // Committee system removed - now using conversation-based messaging
 
   // Setup driver user - kenig.ka@gmail.com with restricted permissions
   try {

@@ -57,7 +57,7 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
     return isOwner || isSuperAdmin || isAdmin || hasModeratePermission;
   };
 
-  // Get or create committee conversation
+  // Get or create committee conversation using new conversation system
   const { data: committeeConversation } = useQuery({
     queryKey: ["/api/conversations/committee", committee],
     queryFn: async () => {
@@ -75,11 +75,12 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
       // Create new conversation if not found
       const response = await apiRequest('POST', '/api/conversations', {
         type: 'channel',
-        name: `${committee.charAt(0).toUpperCase() + committee.slice(1)} Committee`
+        name: `${committee.charAt(0).toUpperCase() + committee.slice(1)} Committee`,
+        participantIds: [user.id] // Add current user as participant
       });
       return response;
     },
-    enabled: !!committee,
+    enabled: !!committee && !!user,
   });
 
   // Fetch messages for committee conversation
