@@ -808,7 +808,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : await storage.getAllMessages();
       }
 
-      res.json(messages);
+      // Filter out empty or blank messages
+      const filteredMessages = messages.filter(msg => 
+        msg && msg.content && msg.content.trim() !== ''
+      );
+
+      res.json(filteredMessages);
     } catch (error) {
       console.error("Error fetching messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
