@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useCelebration, CelebrationToast } from "@/components/celebration-toast";
-import { hasPermission, USER_ROLES, PERMISSIONS, getRoleDisplayName, getDefaultPermissionsForRole } from "@/lib/authUtils";
+import { hasPermission, USER_ROLES, PERMISSIONS, getDefaultPermissionsForRole } from "@shared/auth-utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Users, Shield, Settings, Key, Award, Megaphone, Trash2, Bug } from "lucide-react";
 import AnnouncementManager from "@/components/announcement-manager";

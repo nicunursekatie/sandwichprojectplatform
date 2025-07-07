@@ -177,3 +177,33 @@ export function hasAccessToChat(user: any, chatRoom: string): boolean {
   
   return user.permissions.includes(requiredPermission);
 }
+
+// Function to check if user has a specific permission
+export function hasPermission(user: any, permission: string): boolean {
+  if (!user || !user.permissions) return false;
+  return user.permissions.includes(permission);
+}
+
+// Function to get human-readable role display name
+export function getRoleDisplayName(role: string): string {
+  switch (role) {
+    case USER_ROLES.SUPER_ADMIN:
+      return 'Super Administrator';
+    case USER_ROLES.ADMIN:
+      return 'Administrator';
+    case USER_ROLES.COMMITTEE_MEMBER:
+      return 'Committee Member';
+    case USER_ROLES.HOST:
+      return 'Host Organization';
+    case USER_ROLES.DRIVER:
+      return 'Delivery Driver';
+    case USER_ROLES.VOLUNTEER:
+      return 'Volunteer';
+    case USER_ROLES.RECIPIENT:
+      return 'Recipient Organization';
+    case USER_ROLES.VIEWER:
+      return 'Viewer';
+    default:
+      return role.charAt(0).toUpperCase() + role.slice(1).replace('_', ' ');
+  }
+}
