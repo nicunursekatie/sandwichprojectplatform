@@ -291,55 +291,44 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(messages).orderBy(messages.id).limit(limit);
   }
 
-  // FIXED: Messages must be filtered by threadId to prevent cross-chat contamination
-  async getMessagesByCommittee(committee: string, threadId?: number): Promise<Message[]> {
-    if (threadId) {
-      // Filter by specific threadId for proper conversation isolation
+  // UPDATED: Messages must be filtered by conversationId to prevent cross-chat contamination
+  async getMessagesByCommittee(committee: string, conversationId?: number): Promise<Message[]> {
+    if (conversationId) {
+      // Filter by specific conversationId for proper conversation isolation
       return await db.select().from(messages)
-        .where(and(eq(messages.committee, committee), eq(messages.threadId, threadId)))
-        .orderBy(messages.id);
+        .where(and(eq(messages.committee, committee), eq(messages.conversationId, conversationId)))
+        .orderBy(messages.createdAt);
     } else {
-      // Legacy fallback with migration support for messages without threadId
-      console.warn(`⚠️  getMessagesByCommittee called without threadId for committee: ${committee} - checking for orphaned messages`);
-
-      // First, try to migrate any orphaned messages for this committee
-      await this.migrateOrphanedMessages(committee);
-
-      // Then return all messages for this committee (including newly migrated ones)
-      return await db.select().from(messages).where(eq(messages.committee, committee)).orderBy(messages.id);
-    }
-  }
-
-  // NEW: Migrate orphaned messages that don't have threadId
-  async migrateOrphanedMessages(committee: string): Promise<void> {
-    try {
-      console.log(`🔧 Checking for orphaned ${committee} messages without threadId...`);
-
-      // Get or create thread for this committee
-      const threadId = await this.getOrCreateThreadId(committee);
-
-      // Update messages without threadId for this committee
-      const result = await db.update(messages)
-        .set({ threadId })
-        .where(and(
-          eq(messages.committee, committee),
-          isNull(messages.threadId)
-        ));
-
-      const updatedCount = result.rowCount || 0;
-      if (updatedCount > 0) {
-        console.log(`✅ Migrated ${updatedCount} orphaned ${committee} messages to threadId ${threadId}`);
+      // Get conversation for this committee type
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.type, 'channel'),
+            eq(conversations.name, committee)
+          )
+        )
+        .limit(1);
+      
+      if (conversation) {
+        // Return messages for this conversation
+        return await db.select().from(messages)
+          .where(eq(messages.conversationId, conversation.id))
+          .orderBy(messages.createdAt);
+      } else {
+        // No conversation found, return empty array
+        console.log(`⚠️  No conversation found for committee: ${committee}`);
+        return [];
       }
-    } catch (error) {
-      console.error(`❌ Failed to migrate orphaned messages for ${committee}:`, error);
     }
   }
 
-  // NEW: Get messages by threadId only (preferred method)
-  async getMessagesByThreadId(threadId: number): Promise<Message[]> {
+  // UPDATED: Get messages by conversationId (preferred method)
+  async getMessagesByConversationId(conversationId: number): Promise<Message[]> {
     return await db.select().from(messages)
-      .where(eq(messages.threadId, threadId))
-      .orderBy(messages.id);
+      .where(eq(messages.conversationId, conversationId))
+      .orderBy(messages.createdAt);
   }
 
   // NEW: Get or create conversation for specific conversation types
@@ -408,32 +397,60 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    // Ensure threadId is set for proper conversation isolation
-    if (!insertMessage.threadId) {
-      // Auto-assign threadId based on committee type and reference
-      let referenceId: string | undefined;
+    // Ensure conversationId is set for proper conversation isolation
+    if (!insertMessage.conversationId) {
+      // Auto-assign conversationId based on committee type
+      let conversationType = 'channel';
+      let conversationName = insertMessage.committee;
 
       if (insertMessage.committee === 'direct' && insertMessage.recipientId) {
-        // For direct messages, create unique reference combining both user IDs
+        // For direct messages, create unique conversation
+        conversationType = 'direct';
         const userIds = [insertMessage.userId, insertMessage.recipientId].filter(Boolean).sort();
-        referenceId = userIds.join('_');
-        console.log(`🔍 DIRECT MESSAGE: Creating thread for users ${insertMessage.userId} <-> ${insertMessage.recipientId}, referenceId: ${referenceId}`);
+        conversationName = `direct_${userIds.join('_')}`;
+        console.log(`🔍 DIRECT MESSAGE: Creating conversation for users ${insertMessage.userId} <-> ${insertMessage.recipientId}`);
       } else if (insertMessage.committee === 'group') {
-        // For group messages, use a specific group identifier (to be implemented)
-        referenceId = 'group_' + Date.now(); // Temporary fallback
-        console.log(`🔍 GROUP MESSAGE: Creating thread with referenceId: ${referenceId}`);
+        conversationType = 'group';
+        conversationName = `group_${Date.now()}`; // Temporary fallback
+        console.log(`🔍 GROUP MESSAGE: Creating group conversation`);
       } else {
-        console.log(`🔍 ${insertMessage.committee.toUpperCase()} MESSAGE: Creating thread for committee ${insertMessage.committee}`);
+        console.log(`🔍 ${insertMessage.committee.toUpperCase()} MESSAGE: Creating conversation for committee ${insertMessage.committee}`);
       }
 
-      insertMessage.threadId = await this.getOrCreateThreadId(insertMessage.committee, referenceId);
-      console.log(`✅ SEND: threadId ${insertMessage.threadId} assigned for ${insertMessage.committee} message from ${insertMessage.userId}`);
+      // Get or create conversation
+      const [conversation] = await db
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.type, conversationType),
+            eq(conversations.name, conversationName)
+          )
+        )
+        .limit(1);
+
+      if (conversation) {
+        insertMessage.conversationId = conversation.id;
+        console.log(`✅ SEND: Using existing conversationId ${conversation.id} for ${insertMessage.committee} message from ${insertMessage.userId}`);
+      } else {
+        // Create new conversation
+        const [newConversation] = await db
+          .insert(conversations)
+          .values({
+            type: conversationType,
+            name: conversationName
+          })
+          .returning();
+        
+        insertMessage.conversationId = newConversation.id;
+        console.log(`✅ SEND: Created new conversationId ${newConversation.id} for ${insertMessage.committee} message from ${insertMessage.userId}`);
+      }
     } else {
-      console.log(`🔄 SEND: Using existing threadId ${insertMessage.threadId} for ${insertMessage.committee} message from ${insertMessage.userId}`);
+      console.log(`🔄 SEND: Using existing conversationId ${insertMessage.conversationId} for ${insertMessage.committee} message from ${insertMessage.userId}`);
     }
 
     const [message] = await db.insert(messages).values(insertMessage).returning();
-    console.log(`📤 MESSAGE SENT: id=${message.id}, threadId=${message.threadId}, committee=${message.committee}, sender=${message.userId}`);
+    console.log(`📤 MESSAGE SENT: id=${message.id}, conversationId=${message.conversationId}, committee=${message.committee}, sender=${message.userId}`);
     return message;
   }
 
