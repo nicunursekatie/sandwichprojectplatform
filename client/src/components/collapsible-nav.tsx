@@ -48,7 +48,7 @@ interface NavigationPlainItem {
 
 type NavigationStructureItem = NavigationSection | NavigationPlainItem;
 
-export function CollapsibleNav() {
+export function CollapsibleNav({ onSectionChange }: { onSectionChange?: (section: string) => void }) {
   const [activeSection, setActiveSection] = useState("dashboard");
   const [expandedSections, setExpandedSections] = useState<string[]>(["operations"]);
   const [location, setLocation] = useLocation();
@@ -74,9 +74,9 @@ export function CollapsibleNav() {
       icon: Users, 
       type: "section",
       items: [
-        { id: "hosts", label: "Hosts", icon: Building2, href: "/hosts", permission: PERMISSIONS.VIEW_HOSTS } as NavigationItem,
-        { id: "recipients", label: "Recipients", icon: Users, href: "/recipients", permission: PERMISSIONS.VIEW_RECIPIENTS } as NavigationItem,
-        { id: "drivers", label: "Drivers", icon: Car, href: "/drivers", permission: PERMISSIONS.VIEW_DRIVERS } as NavigationItem,
+        { id: "hosts", label: "Hosts", icon: Building2, href: "/hosts", permission: "view_hosts" } as NavigationItem,
+        { id: "recipients", label: "Recipients", icon: Users, href: "/recipients", permission: "view_recipients" } as NavigationItem,
+        { id: "drivers", label: "Drivers", icon: Car, href: "/drivers", permission: "view_drivers" } as NavigationItem,
       ]
     },
     { 
@@ -85,11 +85,11 @@ export function CollapsibleNav() {
       icon: FolderOpen, 
       type: "section",
       items: [
-        { id: "meetings", label: "Meetings", icon: ClipboardList, href: "/meetings", permission: PERMISSIONS.VIEW_MEETINGS },
-        { id: "analytics", label: "Analytics", icon: BarChart3, href: "/analytics", permission: PERMISSIONS.VIEW_ANALYTICS },
-        { id: "reports", label: "Reports", icon: FileText, href: "/reporting-dashboard", permission: PERMISSIONS.VIEW_REPORTS },
-        { id: "projects", label: "Projects", icon: ListTodo, href: "/projects", permission: PERMISSIONS.VIEW_PROJECTS },
-        { id: "role-demo", label: "Role Demo", icon: Users, href: "/role-demo", permission: PERMISSIONS.VIEW_ROLE_DEMO }
+        { id: "meetings", label: "Meetings", icon: ClipboardList, href: "/meetings", permission: "view_meetings" },
+        { id: "analytics", label: "Analytics", icon: BarChart3, href: "/analytics", permission: "view_analytics" },
+        { id: "reports", label: "Reports", icon: FileText, href: "/reporting-dashboard", permission: "view_reports" },
+        { id: "projects", label: "Projects", icon: ListTodo, href: "/projects", permission: "view_projects" },
+        { id: "role-demo", label: "Role Demo", icon: Users, href: "/role-demo", permission: "view_role_demo" }
       ]
     },
     { 
@@ -98,14 +98,14 @@ export function CollapsibleNav() {
       icon: MessageCircle, 
       type: "section",
       items: [
-        { id: "committee", label: "Committee", icon: Users, href: "/committee", permission: PERMISSIONS.VIEW_COMMITTEE },
+        { id: "committee", label: "Committee", icon: Users, href: "/committee", permission: "view_committee" },
         { id: "messages-comm", label: "Messages", icon: MessageCircle, href: "/messages" },
-        { id: "directory", label: "Directory", icon: Phone, href: "/directory", permission: PERMISSIONS.VIEW_PHONE_DIRECTORY }
+        { id: "phone-directory", label: "Directory", icon: Phone, href: "/phone-directory", permission: "view_phone_directory" }
       ]
     },
     { id: "toolkit", label: "Toolkit", icon: FileText, type: "item", href: "/toolkit" },
     { id: "development", label: "Development", icon: FolderOpen, type: "item", href: "/development" },
-    { id: "admin", label: "Admin", icon: Users, type: "item", href: "/admin", permission: PERMISSIONS.MANAGE_USERS },
+    { id: "user-management", label: "Admin", icon: Users, type: "item", href: "/user-management", permission: "manage_users" },
   ];
 
   // Simplified navigation filtering - force Operations to always show for committee members
@@ -152,19 +152,15 @@ export function CollapsibleNav() {
                   </button>
                   {isExpanded && (
                     <ul className="mt-2 ml-8 space-y-1">
-                      {item.items?.map((subItem) => {
+                      {item.items?.filter(subItem => !subItem.permission || hasPermission(user, subItem.permission)).map((subItem) => {
                         const SubIcon = subItem.icon;
                         const isSubActive = activeSection === subItem.id;
                         return (
                           <li key={subItem.id}>
                             <button
                               onClick={() => {
-
-                                if (subItem.href) {
-                                  setLocation(subItem.href);
-                                } else {
-                                  setActiveSection(subItem.id);
-                                }
+                                setActiveSection(subItem.id);
+                                onSectionChange?.(subItem.id);
                               }}
                               className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                                 isSubActive
@@ -188,12 +184,8 @@ export function CollapsibleNav() {
                 <li key={item.id}>
                   <button
                     onClick={() => {
-
-                      if (item.href) {
-                        setLocation(item.href);
-                      } else {
-                        setActiveSection(item.id);
-                      }
+                      setActiveSection(item.id);
+                      onSectionChange?.(item.id);
                     }}
                     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                       isActive
