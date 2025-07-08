@@ -285,38 +285,7 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(messages).orderBy(messages.id).limit(limit);
   }
 
-  // UPDATED: Messages must be filtered by conversationId to prevent cross-chat contamination
-  async getMessagesByCommittee(committee: string, conversationId?: number): Promise<Message[]> {
-    if (conversationId) {
-      // Filter by specific conversationId for proper conversation isolation
-      return await db.select().from(messages)
-        .where(eq(messages.conversationId, conversationId))
-        .orderBy(messages.createdAt);
-    } else {
-      // Get conversation for this committee type
-      const [conversation] = await db
-        .select()
-        .from(conversations)
-        .where(
-          and(
-            eq(conversations.type, 'channel'),
-            eq(conversations.name, committee)
-          )
-        )
-        .limit(1);
-      
-      if (conversation) {
-        // Return messages for this conversation
-        return await db.select().from(messages)
-          .where(eq(messages.conversationId, conversation.id))
-          .orderBy(messages.createdAt);
-      } else {
-        // No conversation found, return empty array
-        console.log(`⚠️  No conversation found for committee: ${committee}`);
-        return [];
-      }
-    }
-  }
+  // REMOVED: getMessagesByCommittee - no longer needed with new conversation system
 
   // UPDATED: Get messages by conversationId (preferred method)
   async getMessagesByConversationId(conversationId: number): Promise<Message[]> {
@@ -335,7 +304,8 @@ export class DatabaseStorage implements IStorage {
     if (limit) {
       return await this.getRecentMessages(limit);
     } else {
-      return await this.getMessagesByCommittee(messageContext);
+      // For backwards compatibility, return all messages since committee filtering is removed
+      return await this.getAllMessages();
     }
   }
 
