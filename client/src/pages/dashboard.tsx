@@ -38,6 +38,7 @@ import { queryClient } from "@/lib/queryClient";
 import SimpleNav from "@/components/simple-nav";
 import AnnouncementBanner from "@/components/announcement-banner";
 import MessageNotifications from "@/components/message-notifications";
+import WorkLogPage from "@/pages/work-log";
 
 export default function Dashboard() {
   const [activeSection, setActiveSection] = useState("dashboard");
@@ -267,6 +268,8 @@ export default function Dashboard() {
         );
       case "role-demo":
         return <RoleDemo />;
+      case "work-log":
+        return <WorkLogPage />;
 
       case "committee":
       case "committee-chat":
