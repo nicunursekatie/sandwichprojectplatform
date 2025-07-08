@@ -734,23 +734,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`[DEBUG] Group messages requested - currentUserId: ${currentUserId}, groupId: ${groupId}`);
         
-        // TEMPORARILY DISABLED: Verify user is member of this group
-        // const membership = await db
-        //   .select()
-        //   .from(groupMemberships)
-        //   .where(
-        //     and(
-        //       eq(groupMemberships.groupId, groupId),
-        //       eq(groupMemberships.userId, currentUserId),
-        //       eq(groupMemberships.isActive, true)
-        //     )
-        //   )
-        //   .limit(1);
+        // Verify user is member of this group
+        const membership = await db
+          .select()
+          .from(groupMemberships)
+          .where(
+            and(
+              eq(groupMemberships.groupId, groupId),
+              eq(groupMemberships.userId, currentUserId),
+              eq(groupMemberships.isActive, true)
+            )
+          )
+          .limit(1);
         
-        // if (membership.length === 0) {
-        //   console.log(`[DEBUG] User ${currentUserId} is not a member of group ${groupId}`);
-        //   return res.status(403).json({ message: "Not a member of this group" });
-        // }
+        if (membership.length === 0) {
+          console.log(`[DEBUG] User ${currentUserId} is not a member of group ${groupId}`);
+          return res.status(403).json({ message: "Not a member of this group" });
+        }
         
         console.log(`[DEBUG] User ${currentUserId} verified as member of group ${groupId}`);
         
@@ -772,8 +772,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         //   return res.json([]); // Return empty array if no thread exists
         // }
         
-        console.log(`[DEBUG] No conversation thread found for group ${groupId}`);
-        return res.json([]); // Return empty array temporarily
+        // Get the conversation thread ID for this group
+        const thread = await db
+          .select()
+          .from(conversationThreads)
+          .where(
+            and(
+              eq(conversationThreads.type, "group"),
+              eq(conversationThreads.referenceId, groupId.toString()),
+              eq(conversationThreads.isActive, true)
+            )
+          )
+          .limit(1);
+          
+        if (thread.length === 0) {
+          console.log(`[DEBUG] No conversation thread found for group ${groupId}`);
+          return res.json([]); // Return empty array if no thread exists
+        }
+        
+        const threadId = thread[0].id;
+        console.log(`[DEBUG] Using thread ID ${threadId} for group ${groupId}`);
+        
+        // Get messages for this specific thread
+        const messageResults = await db
+          .select()
+          .from(messagesTable)
+          .where(eq(messagesTable.threadId, threadId))
+          .orderBy(messagesTable.timestamp);
+        messages = messageResults;
+          
+        console.log(`[DEBUG] Group messages found: ${messages.length} messages for thread ${threadId}`);
         
         // TEMPORARILY DISABLED: Get messages for this specific thread
         // const threadId = thread[0].id;
