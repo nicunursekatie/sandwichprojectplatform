@@ -251,15 +251,12 @@ export class DatabaseStorage implements IStorage {
           id: messages.id,
           content: messages.content,
           sender: messages.sender,
-          timestamp: messages.timestamp || messages.createdAt,
+          timestamp: messages.createdAt,
           userId: messages.userId,
-          committee: messages.committee,
-          recipientId: messages.recipientId,
-          conversationId: messages.conversationId,
-          threadId: messages.threadId
+          conversationId: messages.conversationId
         })
         .from(messages)
-        .orderBy(messages.timestamp || messages.createdAt);
+        .orderBy(messages.createdAt);
 
       return result;
     } catch (error) {
@@ -269,15 +266,12 @@ export class DatabaseStorage implements IStorage {
         .select({
           id: messages.id,
           content: messages.content,
-          timestamp: messages.timestamp || messages.createdAt,
+          timestamp: messages.createdAt,
           userId: messages.userId,
-          committee: messages.committee,
-          recipientId: messages.recipientId,
-          conversationId: messages.conversationId,
-          threadId: messages.threadId
+          conversationId: messages.conversationId
         })
         .from(messages)
-        .orderBy(messages.timestamp || messages.createdAt);
+        .orderBy(messages.createdAt);
 
       // Add default sender for compatibility
       return result.map(msg => ({
@@ -296,7 +290,7 @@ export class DatabaseStorage implements IStorage {
     if (conversationId) {
       // Filter by specific conversationId for proper conversation isolation
       return await db.select().from(messages)
-        .where(and(eq(messages.committee, committee), eq(messages.conversationId, conversationId)))
+        .where(eq(messages.conversationId, conversationId))
         .orderBy(messages.createdAt);
     } else {
       // Get conversation for this committee type
@@ -399,58 +393,44 @@ export class DatabaseStorage implements IStorage {
   async createMessage(insertMessage: InsertMessage): Promise<Message> {
     // Ensure conversationId is set for proper conversation isolation
     if (!insertMessage.conversationId) {
-      // Auto-assign conversationId based on committee type
+      // Auto-assign conversationId based on message type
       let conversationType = 'channel';
-      let conversationName = insertMessage.committee;
+      let conversationName = 'general'; // Default to general chat
 
-      if (insertMessage.committee === 'direct' && insertMessage.recipientId) {
-        // For direct messages, create unique conversation
-        conversationType = 'direct';
-        const userIds = [insertMessage.userId, insertMessage.recipientId].filter(Boolean).sort();
-        conversationName = `direct_${userIds.join('_')}`;
-        console.log(`🔍 DIRECT MESSAGE: Creating conversation for users ${insertMessage.userId} <-> ${insertMessage.recipientId}`);
-      } else if (insertMessage.committee === 'group') {
-        conversationType = 'group';
-        conversationName = `group_${Date.now()}`; // Temporary fallback
-        console.log(`🔍 GROUP MESSAGE: Creating group conversation`);
-      } else {
-        console.log(`🔍 ${insertMessage.committee.toUpperCase()} MESSAGE: Creating conversation for committee ${insertMessage.committee}`);
-      }
-
-      // Get or create conversation
+      // For now, create a general conversation if none exists
       const [conversation] = await db
         .select()
         .from(conversations)
         .where(
           and(
-            eq(conversations.type, conversationType),
-            eq(conversations.name, conversationName)
+            eq(conversations.type, 'channel'),
+            eq(conversations.name, 'general')
           )
         )
         .limit(1);
 
       if (conversation) {
         insertMessage.conversationId = conversation.id;
-        console.log(`✅ SEND: Using existing conversationId ${conversation.id} for ${insertMessage.committee} message from ${insertMessage.userId}`);
+        console.log(`✅ SEND: Using existing conversationId ${conversation.id} for general message from ${insertMessage.userId}`);
       } else {
-        // Create new conversation
+        // Create new general conversation
         const [newConversation] = await db
           .insert(conversations)
           .values({
-            type: conversationType,
-            name: conversationName
+            type: 'channel',
+            name: 'general'
           })
           .returning();
         
         insertMessage.conversationId = newConversation.id;
-        console.log(`✅ SEND: Created new conversationId ${newConversation.id} for ${insertMessage.committee} message from ${insertMessage.userId}`);
+        console.log(`✅ SEND: Created new conversationId ${newConversation.id} for general message from ${insertMessage.userId}`);
       }
     } else {
-      console.log(`🔄 SEND: Using existing conversationId ${insertMessage.conversationId} for ${insertMessage.committee} message from ${insertMessage.userId}`);
+      console.log(`🔄 SEND: Using existing conversationId ${insertMessage.conversationId} for message from ${insertMessage.userId}`);
     }
 
     const [message] = await db.insert(messages).values(insertMessage).returning();
-    console.log(`📤 MESSAGE SENT: id=${message.id}, conversationId=${message.conversationId}, committee=${message.committee}, sender=${message.userId}`);
+    console.log(`📤 MESSAGE SENT: id=${message.id}, conversationId=${message.conversationId}, sender=${message.userId}`);
     return message;
   }
 
