@@ -56,6 +56,9 @@ export default function MessageLog() {
   const { data: messages = [], isLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages"]
   });
+  const [optimisticMessages, setOptimisticMessages] = useState<Message[] | null>(null);
+
+  const displayedMessages = optimisticMessages || messages;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -66,9 +69,9 @@ export default function MessageLog() {
   }, [messages]);
 
   // Group messages into threads - only show root messages, not replies
-  const rootMessages = messages.filter(m => !m.parentId);
+  const rootMessages = displayedMessages.filter(m => !m.parentId);
   const getThreadReplies = (threadId: number) => 
-    messages.filter(m => m.threadId === threadId && m.parentId);
+    displayedMessages.filter(m => m.threadId === threadId && m.parentId);
   
   const getLatestReply = (threadId: number) => {
     const replies = getThreadReplies(threadId);
@@ -128,14 +131,25 @@ export default function MessageLog() {
     mutationFn: async (messageId: number) => {
       return apiRequest('DELETE', `/api/messages/${messageId}`);
     },
+    onMutate: async (messageId: number) => {
+      // Optimistically remove the message from the UI
+      setOptimisticMessages((prev) => {
+        const base = prev || messages;
+        return base.filter((m) => m.id !== messageId);
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/messages'] });
+      setOptimisticMessages(null);
       toast({
         title: "Message deleted",
         description: "The message has been removed from the chat.",
       });
     },
-    onError: () => {
+    onError: (error, messageId, context) => {
+      // Roll back optimistic update
+      setOptimisticMessages(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/messages'] });
       toast({
         title: "Delete failed",
         description: "Could not delete the message. Please try again.",
@@ -292,14 +306,14 @@ export default function MessageLog() {
             </DialogContent>
           </Dialog>
           <div className="text-xs text-slate-500">
-            {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+            {displayedMessages.length} {displayedMessages.length === 1 ? 'message' : 'messages'}
           </div>
         </div>
       </div>
 
       {/* Chat Messages - Slack style */}
       <div className="flex-1 overflow-y-auto px-2 sm:px-4 py-2 min-h-0">
-        {messages.length === 0 && (
+        {displayedMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <MessageCircle className="w-12 h-12 text-slate-300 mb-4" />
             <div className="text-xl font-bold text-slate-900 mb-2">Welcome to #team-chat</div>
