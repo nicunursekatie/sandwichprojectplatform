@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import MessageLog from "@/components/message-log";
 import CommitteeChat from "@/components/committee-chat";
 import HostChat from "@/components/host-chat";
+import DriverChat from "@/components/driver-chat";
+import RecipientChat from "@/components/recipient-chat";
 import CoreTeamChat from "@/components/core-team-chat";
 import { GroupMessaging } from "@/components/group-messaging";
 import DirectMessaging from "@/components/direct-messaging";
@@ -69,8 +71,8 @@ export default function ChatHub() {
       value: "hosts", 
       label: "Host Chat", 
       description: "Coordination with sandwich collection hosts",
-      icon: <Building2 className="h-4 w-4" />,
-      component: <MessageLog />,
+      icon: <Building2 className="h-4 w-4" />, 
+      component: <HostChat />, 
       color: "bg-primary/10 text-primary"
     });
   }
@@ -80,8 +82,8 @@ export default function ChatHub() {
       value: "drivers", 
       label: "Driver Chat", 
       description: "Delivery and transportation coordination",
-      icon: <Truck className="h-4 w-4" />,
-      component: <MessageLog />,
+      icon: <Truck className="h-4 w-4" />, 
+      component: <DriverChat />, 
       color: "bg-orange-100 text-orange-800"
     });
   }
@@ -91,8 +93,8 @@ export default function ChatHub() {
       value: "recipients", 
       label: "Recipient Chat", 
       description: "Communication with receiving organizations",
-      icon: <Heart className="h-4 w-4" />,
-      component: <MessageLog />,
+      icon: <Heart className="h-4 w-4" />, 
+      component: <RecipientChat />, 
       color: "bg-primary/10 text-primary"
     });
   }

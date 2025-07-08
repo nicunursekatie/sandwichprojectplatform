@@ -85,20 +85,53 @@ export default function CoreTeamChat() {
     );
   }
 
-  // Get Core Team conversation ID  
-  const { data: conversations = [] } = useQuery({
-    queryKey: ["/api/conversations"],
-    enabled: !!user,
+  // Get or create Core Team conversation
+  const { data: coreTeamConversation } = useQuery({
+    queryKey: ["/api/conversations/core-team"],
+    queryFn: async () => {
+      console.log('[DEBUG] Core Team Chat: Starting conversation lookup...');
+      
+      // First try to find existing Core Team conversation
+      const response = await apiRequest('GET', '/api/conversations');
+      const conversations = await response.json();
+      console.log('[DEBUG] Core Team Chat: All conversations:', conversations);
+      
+      const existing = conversations.find((c: any) => c.type === 'channel' && c.name === 'Core Team');
+      console.log('[DEBUG] Core Team Chat: Found existing conversation:', existing);
+      
+      if (existing) {
+        return existing;
+      }
+      
+      console.log('[DEBUG] Core Team Chat: Creating new Core Team conversation...');
+      // Create Core Team conversation if it doesn't exist
+      const createResponse = await apiRequest('POST', '/api/conversations', {
+        type: 'channel',
+        name: 'Core Team'
+      });
+      console.log('[DEBUG] Core Team Chat: Created conversation:', createResponse);
+      return createResponse;
+    },
+    enabled: !!user && hasCoreTeamAccess,
   });
-  
-  const coreTeamConversation = conversations.find(c => c.type === 'channel' && c.name === 'Core Team');
 
   // Fetch core team messages from the new conversation system
-  const { data: messages = [] } = useQuery<Message[]>({
+  const { data: messages = [], isLoading: messagesLoading, error: messagesError } = useQuery<Message[]>({
     queryKey: ["/api/conversations", coreTeamConversation?.id, "messages"],
     enabled: !!coreTeamConversation,
     refetchInterval: 3000,
+    onSuccess: (data) => {
+      console.log('[DEBUG] Core Team Chat: Messages loaded:', data);
+    },
+    onError: (error) => {
+      console.error('[DEBUG] Core Team Chat: Error loading messages:', error);
+    }
   });
+  
+  console.log('[DEBUG] Core Team Chat: Conversation ID:', coreTeamConversation?.id);
+  console.log('[DEBUG] Core Team Chat: Messages loading:', messagesLoading);
+  console.log('[DEBUG] Core Team Chat: Messages error:', messagesError);
+  console.log('[DEBUG] Core Team Chat: Messages count:', messages.length);
   const [optimisticMessages, setOptimisticMessages] = useState<Message[] | null>(null);
   const displayedMessages = optimisticMessages || messages;
 
