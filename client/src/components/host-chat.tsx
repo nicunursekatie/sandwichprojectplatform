@@ -95,6 +95,13 @@ export default function HostChat() {
     !!selectedHost
   );
 
+  useEffect(() => {
+    setOptimisticMessages(null);
+    if (hostConversation?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", hostConversation.id, "messages"] });
+    }
+  }, [hostConversation?.id]);
+
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { content: string }) => {
       if (!hostConversation) throw new Error("No conversation available");

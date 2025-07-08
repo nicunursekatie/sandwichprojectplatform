@@ -164,6 +164,13 @@ export default function CoreTeamChat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    setOptimisticMessages(null);
+    if (coreTeamConversation?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", coreTeamConversation.id, "messages"] });
+    }
+  }, [coreTeamConversation?.id]);
+
   const handleSendMessage = () => {
     if (!message.trim() || !coreTeamConversation) return;
     

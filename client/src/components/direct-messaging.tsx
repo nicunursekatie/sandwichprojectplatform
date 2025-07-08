@@ -117,6 +117,13 @@ export default function DirectMessaging() {
   const [optimisticMessages, setOptimisticMessages] = useState<Message[] | null>(null);
   const displayedMessages = optimisticMessages || messages;
 
+  useEffect(() => {
+    setOptimisticMessages(null);
+    if (currentConversation?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", currentConversation.id, "messages"] });
+    }
+  }, [currentConversation?.id]);
+
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (content: string) => {

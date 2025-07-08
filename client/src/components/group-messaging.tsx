@@ -142,6 +142,13 @@ export function GroupMessaging({ currentUser }: GroupMessagesProps) {
   const [optimisticMessages, setOptimisticMessages] = useState<Message[] | null>(null);
   const displayedMessages = optimisticMessages || messages;
 
+  useEffect(() => {
+    setOptimisticMessages(null);
+    if (groupConversation?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", groupConversation.id, "messages"] });
+    }
+  }, [groupConversation?.id]);
+
   // Auto-mark group messages as read when viewing group
   useAutoMarkAsRead(
     "groups", 

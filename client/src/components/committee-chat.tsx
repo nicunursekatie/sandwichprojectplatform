@@ -111,6 +111,13 @@ export default function CommitteeChat() {
     !!selectedCommittee
   );
 
+  useEffect(() => {
+    setOptimisticMessages(null);
+    if (committeeConversation?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", committeeConversation.id, "messages"] });
+    }
+  }, [committeeConversation?.id]);
+
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { content: string }) => {
       if (!committeeConversation) throw new Error("No conversation available");
