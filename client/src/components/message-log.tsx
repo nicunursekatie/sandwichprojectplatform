@@ -12,10 +12,11 @@ import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { insertMessageSchema, type Message } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { z } from "zod";
+import { z } from "zod";
 
-const messageFormSchema = insertMessageSchema.extend({
-  sender: insertMessageSchema.shape.sender.default("Team Member")
+const messageFormSchema = z.object({
+  content: z.string().min(1, "Message content is required"),
+  sender: z.string().optional() // Optional since we'll use userName
 });
 
 type MessageFormData = z.infer<typeof messageFormSchema>;
@@ -75,7 +76,6 @@ export default function MessageLog() {
   const form = useForm<MessageFormData>({
     resolver: zodResolver(messageFormSchema),
     defaultValues: {
-      sender: "Team Member",
       content: ""
     }
   });
@@ -104,13 +104,12 @@ export default function MessageLog() {
       console.log('Message sent successfully:', data);
       queryClient.invalidateQueries({ queryKey: ["/api/messages"] });
       form.reset({
-        sender: form.getValues("sender"),
         content: ""
       });
       setReplyingTo(null);
       toast({
         title: "Message sent",
-        description: replyingTo ? "Reply added to thread" : "Your message has been added to the team chat."
+        description: "Your message has been added to the team chat."
       });
     },
     onError: (error) => {
@@ -149,9 +148,24 @@ export default function MessageLog() {
     console.log('Current userName:', userName);
     console.log('Is replying to:', replyingTo);
     
-    const messageData = replyingTo 
-      ? { ...data, sender: userName || "Anonymous", parentId: replyingTo.id, threadId: replyingTo.threadId || replyingTo.id }
-      : data;
+    // Fix: Use userName as sender (display name) and let server set userId from session
+    const messageData = {
+      content: data.content,
+      sender: userName || data.sender || "Anonymous", // Use userName as display name
+      // Don't send userId - server will get it from session
+      // Don't send conversationId - server will auto-assign to general chat
+    };
+    
+    if (replyingTo) {
+      // For replies, we need to handle this differently since we're using the new system
+      console.log('Reply functionality needs to be updated for new messaging system');
+      toast({
+        title: "Reply not supported yet",
+        description: "Reply functionality is being updated for the new messaging system.",
+        variant: "destructive"
+      });
+      return;
+    }
       
     console.log('Final message data to send:', messageData);
     console.log('About to call sendMessageMutation.mutate...');
@@ -472,21 +486,6 @@ export default function MessageLog() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
-            <FormField
-              control={form.control}
-              name="sender"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <Input
-                      placeholder="Display name"
-                      {...field}
-                      className="text-sm"
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
             <div className="flex items-end gap-2">
               <FormField
                 control={form.control}
