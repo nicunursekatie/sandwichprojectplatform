@@ -802,7 +802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .select()
           .from(messagesTable)
           .where(eq(messagesTable.conversationId, conversationId))
-          .orderBy(messagesTable.timestamp);
+          .orderBy(messagesTable.createdAt);
         messages = messageResults;
           
         console.log(`[DEBUG] Group messages found: ${messages.length} messages for thread ${threadId}`);
@@ -5187,7 +5187,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .select()
           .from(messagesTable)
           .where(eq(messagesTable.threadId, thread.threadId))
-          .orderBy(messagesTable.timestamp);
+          .orderBy(messagesTable.createdAt);
         
         console.log(`[DEBUG] Found ${groupMessages.length} messages for group ${groupId} thread ${thread.threadId}`);
         res.json(groupMessages);
@@ -5201,12 +5201,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             content: messagesTable.content,
             userId: messagesTable.userId,
             sender: messagesTable.sender,
-            timestamp: messagesTable.timestamp || messagesTable.createdAt,
+            timestamp: messagesTable.createdAt,
             createdAt: messagesTable.createdAt
           })
           .from(messagesTable)
           .where(eq(messagesTable.conversationId, groupId))
-          .orderBy(messagesTable.timestamp || messagesTable.createdAt);
+          .orderBy(messagesTable.createdAt);
         
         console.log(`[DEBUG] Fallback: Found ${groupMessages.length} messages for conversation ${groupId}`);
         res.json(groupMessages);
@@ -6162,12 +6162,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: messagesTable.userId,
           sender: messagesTable.sender,
           createdAt: messagesTable.createdAt,
-          updatedAt: messagesTable.updatedAt,
-          timestamp: messagesTable.timestamp
+          updatedAt: messagesTable.updatedAt
         })
         .from(messagesTable)
         .where(eq(messagesTable.conversationId, conversationId))
-        .orderBy(messagesTable.timestamp || messagesTable.createdAt);
+        .orderBy(messagesTable.createdAt);
 
       // Transform to match expected format
       const formattedMessages = conversationMessages.map(msg => ({
@@ -6175,7 +6174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content: msg.content,
         userId: msg.userId,
         sender: msg.sender || 'Unknown User',
-        timestamp: msg.timestamp || msg.createdAt,
+        timestamp: msg.createdAt,
         committee: 'conversation' // For compatibility
       }));
 
