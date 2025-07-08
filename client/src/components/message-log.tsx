@@ -13,6 +13,7 @@ import { insertMessageSchema, type Message } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { useAuth } from "@/hooks/useAuth";
 
 const messageFormSchema = z.object({
   content: z.string().min(1, "Message content is required"),
@@ -28,6 +29,7 @@ export default function MessageLog() {
   const [userName, setUserName] = useState("");
   const [isNameDialogOpen, setIsNameDialogOpen] = useState(false);
   const [tempUserName, setTempUserName] = useState("");
+  const { user } = useAuth();
 
   // Load user name from localStorage on component mount
   useEffect(() => {
@@ -147,15 +149,22 @@ export default function MessageLog() {
     console.log('Form data received:', data);
     console.log('Current userName:', userName);
     console.log('Is replying to:', replyingTo);
-    
-    // Fix: Use userName as sender (display name) and let server set userId from session
+
+    if (!user?.id) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to send messages.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const messageData = {
       content: data.content,
-      sender: userName || data.sender || "Anonymous", // Use userName as display name
-      // Don't send userId - server will get it from session
-      // Don't send conversationId - server will auto-assign to general chat
+      sender: userName || data.sender || "Anonymous",
+      userId: user.id, // Add userId to payload
     };
-    
+
     if (replyingTo) {
       // For replies, we need to handle this differently since we're using the new system
       console.log('Reply functionality needs to be updated for new messaging system');
@@ -166,10 +175,10 @@ export default function MessageLog() {
       });
       return;
     }
-      
-    console.log('Final message data to send:', messageData);
+
+    console.log('Final message data to send:', JSON.stringify(messageData));
     console.log('About to call sendMessageMutation.mutate...');
-    
+
     sendMessageMutation.mutate(messageData);
   };
 
