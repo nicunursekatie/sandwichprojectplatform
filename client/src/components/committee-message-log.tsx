@@ -61,22 +61,35 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
   const { data: committeeConversation } = useQuery({
     queryKey: ["/api/conversations/committee", committee],
     queryFn: async () => {
+      console.log('🔍 CommitteeMessageLog: Looking for conversation for committee:', committee);
+      
       // First try to find existing conversation
-      const conversations = await apiRequest('GET', '/api/conversations');
+      const conversationsResponse = await apiRequest('GET', '/api/conversations');
+      const conversations = await conversationsResponse.json();
+      console.log('🔍 CommitteeMessageLog: All conversations:', conversations);
+      
+      const expectedName = `${committee.charAt(0).toUpperCase() + committee.slice(1)} Committee`;
+      console.log('🔍 CommitteeMessageLog: Looking for conversation with name:', expectedName);
+      
       const existingConversation = conversations.find((conv: any) => 
         conv.type === 'channel' && 
-        conv.name === `${committee.charAt(0).toUpperCase() + committee.slice(1)} Committee`
+        conv.name === expectedName
       );
       
       if (existingConversation) {
+        console.log('🔍 CommitteeMessageLog: Found existing conversation:', existingConversation);
         return existingConversation;
       }
+      
+      console.log('🔍 CommitteeMessageLog: No existing conversation found, creating new one...');
       
       // Create new conversation if not found
       const response = await apiRequest('POST', '/api/conversations', {
         type: 'channel',
-        name: `${committee.charAt(0).toUpperCase() + committee.slice(1)} Committee`
+        name: expectedName
       });
+      
+      console.log('🔍 CommitteeMessageLog: Created new conversation:', response);
       return response;
     },
     enabled: !!committee,
@@ -94,10 +107,23 @@ export default function CommitteeMessageLog({ committee }: CommitteeMessageLogPr
 
   const sendMessageMutation = useMutation({
     mutationFn: async (data: { content: string }) => {
-      if (!committeeConversation) throw new Error("No conversation available");
-      return await apiRequest('POST', `/api/conversations/${committeeConversation.id}/messages`, {
+      console.log('🔍 CommitteeMessageLog: Attempting to send message');
+      console.log('🔍 CommitteeMessageLog: committeeConversation:', committeeConversation);
+      console.log('🔍 CommitteeMessageLog: message data:', data);
+      
+      if (!committeeConversation) {
+        console.error('🔍 CommitteeMessageLog: No conversation available');
+        throw new Error("No conversation available");
+      }
+      
+      console.log('🔍 CommitteeMessageLog: Sending to endpoint:', `/api/conversations/${committeeConversation.id}/messages`);
+      
+      const response = await apiRequest('POST', `/api/conversations/${committeeConversation.id}/messages`, {
         content: data.content
       });
+      
+      console.log('🔍 CommitteeMessageLog: Message sent successfully:', response);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", committeeConversation?.id, "messages"] });
