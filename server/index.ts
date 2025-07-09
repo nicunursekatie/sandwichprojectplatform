@@ -47,6 +47,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add immediate health check endpoint (responds before database init)
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    message: 'Server is starting up...'
+  });
+});
+
 async function startServer() {
   let server = null;
   
