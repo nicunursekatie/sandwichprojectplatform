@@ -12,11 +12,15 @@ build = ["npm", "run", "build"]
 run = ["npm", "run", "start"]
 
 [[ports]]
+localPort = 80
+externalPort = 3000
+
+[[ports]]
 localPort = 5000
 externalPort = 80
 
 [workflows]
-runButton = "Development"
+runButton = "Start Server"
 
 [[workflows.workflow]]
 name = "Project"
@@ -38,15 +42,6 @@ waitForPort = 5000
 
 [[workflows.workflow]]
 name = "Start Server"
-author = 43025137
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-
-[[workflows.workflow]]
-name = "Development"
 author = 43025137
 mode = "sequential"
 
