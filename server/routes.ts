@@ -6168,8 +6168,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(messagesTable.conversationId, conversationId))
         .orderBy(messagesTable.createdAt);
 
+      // Defensive: always use an array
+      const safeMessages = Array.isArray(conversationMessages) ? conversationMessages : [];
+
       // Transform to match expected format
-      const formattedMessages = conversationMessages.map(msg => ({
+      const formattedMessages = safeMessages.map(msg => ({
         id: msg.id,
         content: msg.content,
         userId: msg.userId,
