@@ -66,8 +66,6 @@ app.get('/', (req, res) => {
 });
 
 async function startServer() {
-  let server = null;
-  
   try {
     // Initialize database with seed data if empty
     console.log("Starting database initialization...");
@@ -76,7 +74,7 @@ async function startServer() {
     
     // Register routes and create server
     console.log("Registering routes...");
-    server = await registerRoutes(app);
+    const server = await registerRoutes(app);
     console.log("✓ Routes registered successfully");
     
     // Serve static files after routes but before Vite
@@ -105,15 +103,12 @@ async function startServer() {
     const port = 5000;
     
     // Enhanced server listening with better error handling
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
+    const httpServer = server.listen(port, "0.0.0.0", () => {
       log(`✓ Server successfully listening on port ${port}`);
       log(`✓ Application startup complete - server running`);
       log(`✓ Process ID: ${process.pid}`);
       log(`✓ Server ready to accept connections`);
+      log(`✓ Health check endpoint available at /health`);
       log(`✓ Server will continue running for deployment`);
       
       // Keep the process alive
@@ -123,7 +118,7 @@ async function startServer() {
     // Important: Don't return or exit here - let the server keep running
     
     // Add error handler for server listen failures
-    server.on('error', (error: any) => {
+    httpServer.on('error', (error: any) => {
       console.error('✗ Server listen error:', error);
       if (error.code === 'EADDRINUSE') {
         console.error(`Port ${port} is already in use`);
@@ -143,7 +138,7 @@ async function startServer() {
       log(`Received ${signal}, starting graceful shutdown...`);
       
       // Stop accepting new connections
-      server.close(() => {
+      httpServer.close(() => {
         log('HTTP server closed');
         // Only exit in development
         if (process.env.NODE_ENV === 'development') {
@@ -197,7 +192,7 @@ async function startServer() {
     console.log('✓ Server will continue running to handle requests');
     
     // Return the server instance to keep the promise chain active
-    return server;
+    return httpServer;
     
   } catch (error) {
     console.error("✗ Application startup failed:", error);
@@ -222,6 +217,13 @@ async function startServer() {
       const minimalServer = app.listen(5000, '0.0.0.0', () => {
         console.log('✓ Minimal server listening on port 5000');
         console.log('✓ Basic endpoints available for health checks');
+        console.log('✓ Minimal mode - server running continuously');
+      });
+      
+      // Ensure minimal server stays alive
+      minimalServer.on('error', (err) => {
+        console.error('Minimal server error:', err);
+        // Don't exit - keep trying
       });
       
       return minimalServer;
