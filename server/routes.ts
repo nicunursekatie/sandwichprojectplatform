@@ -6677,7 +6677,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("[DEBUG] Sample message:", conversationMessages[0]);
 
         // Transform to match expected format
-        const formattedMessages = safeMessages.map((msg) => ({
+        const formattedMessages = conversationMessages.map((msg) => ({
           id: msg.id,
           content: msg.content,
           userId: msg.user_id,
