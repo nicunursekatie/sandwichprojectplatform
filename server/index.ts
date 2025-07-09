@@ -1,4 +1,3 @@
-
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -41,7 +40,7 @@ app.use((req, res, next) => {
 async function startServer() {
   try {
     console.log("🚀 Starting The Sandwich Project server...");
-    
+
     // Basic health checkpoint endpoint - available immediately
     app.get('/health', (_req: Request, res: Response) => {
       res.status(200).json({ 
@@ -64,21 +63,21 @@ async function startServer() {
     // Start listening immediately on port 5000
     const port = 5000;
     const host = "0.0.0.0";
-    
+
     const httpServer = app.listen(port, host, async () => {
       console.log(`✓ Server is running on http://${host}:${port}`);
       console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log("✓ Basic server ready - starting heavy initialization...");
-      
+
       // Now perform heavy initialization after server is listening
       try {
         // Initialize database with seed data if empty
         await initializeDatabase();
         console.log("✓ Database initialization complete");
-        
+
         const server = await registerRoutes(app);
         console.log("✓ Routes registered successfully");
-        
+
         // Update health endpoint to show full initialization
         app.get('/health', (_req: Request, res: Response) => {
           res.status(200).json({ 
@@ -93,20 +92,26 @@ async function startServer() {
         // Serve static files after routes but before Vite
         app.use('/attached_assets', express.static('attached_assets'));
 
-        // Setup Vite or static serving
-        if (app.get("env") === "development") {
-          await setupVite(app, server);
-          console.log("✓ Vite development server setup complete");
+        // Setup Vite or static serving - PRODUCTION SAFE
+        if (process.env.NODE_ENV === "development") {
+          try {
+            const { setupVite } = await import("./vite.js");
+            await setupVite(app, server);
+            console.log("✓ Vite development server setup complete");
+          } catch (error) {
+            console.log("⚠ Vite setup failed, continuing without it:", error.message);
+          }
         } else {
-          serveStatic(app);
+          // In production, serve static files directly
+          app.use(express.static("dist/public"));
           console.log("✓ Static file serving configured for production");
         }
-        
+
         console.log("✓ The Sandwich Project server is fully ready to handle requests");
-        
+
       } catch (initError) {
         console.error("✗ Heavy initialization failed:", initError);
-        
+
         // In production, try to continue with minimal functionality
         if (process.env.NODE_ENV === 'production') {
           console.log("Continuing with minimal functionality for production deployment...");
@@ -119,7 +124,7 @@ async function startServer() {
     // Graceful shutdown handlers
     const shutdown = async (signal: string) => {
       console.log(`Received ${signal}, starting graceful shutdown...`);
-      
+
       // Stop accepting new connections
       httpServer.close(() => {
         console.log('HTTP server closed gracefully');
@@ -154,10 +159,10 @@ async function startServer() {
 
     // Keep the process alive
     return httpServer;
-    
+
   } catch (error) {
     console.error("✗ Server startup failed:", error);
-    
+
     // In production, try to start with minimal functionality
     if (process.env.NODE_ENV === 'production') {
       console.log("Attempting minimal startup for production deployment...");
@@ -166,7 +171,7 @@ async function startServer() {
       });
       return fallbackServer;
     }
-    
+
     // Don't exit in development - return a minimal server to keep process alive
     console.log("Starting minimal development server to keep process alive...");
     const minimalServer = app.listen(5000, '0.0.0.0', () => {
@@ -183,7 +188,7 @@ startServer().then((server) => {
   setInterval(() => {
     console.log(`✓ Server health check - uptime: ${Math.round(process.uptime())}s`);
   }, 300000); // Every 5 minutes
-  
+
   // Return the server instance to prevent the module from exiting
   return server;
 }).catch((error) => {
