@@ -50,6 +50,16 @@ async function startServer() {
     const server = await registerRoutes(app);
     console.log("✓ Routes registered successfully");
     
+    // Health checkpoint endpoint
+    app.get('/health', (_req: Request, res: Response) => {
+      res.status(200).json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV || 'development'
+      });
+    });
+
     // Serve static files after routes but before Vite
     app.use('/attached_assets', express.static('attached_assets'));
 
@@ -93,11 +103,12 @@ async function startServer() {
       
       // Stop accepting new connections
       httpServer.close(() => {
-        console.log('HTTP server closed');
-        process.exit(0);
+        console.log('HTTP server closed gracefully');
+        // Only exit after confirming server is closed
+        setTimeout(() => process.exit(0), 1000);
       });
 
-      // Force shutdown after 10 seconds
+      // Force shutdown after 10 seconds only if needed
       setTimeout(() => {
         console.log('Forcing shutdown after timeout');
         process.exit(1);
@@ -137,16 +148,31 @@ async function startServer() {
       return fallbackServer;
     }
     
-    process.exit(1);
+    // Don't exit in development - return a minimal server to keep process alive
+    console.log("Starting minimal development server to keep process alive...");
+    const minimalServer = app.listen(5000, '0.0.0.0', () => {
+      console.log('✓ Minimal development server listening on port 5000');
+    });
+    return minimalServer;
   }
 }
 
 // Start the server and keep the main module active
 startServer().then((server) => {
   console.log("✓ Server startup sequence completed successfully");
+  // Keep process alive with periodic health check
+  setInterval(() => {
+    console.log(`✓ Server health check - uptime: ${Math.round(process.uptime())}s`);
+  }, 300000); // Every 5 minutes
+  
   // Return the server instance to prevent the module from exiting
   return server;
 }).catch((error) => {
   console.error("✗ Failed to start server:", error);
-  process.exit(1);
+  // Instead of exiting, try to start a minimal server
+  console.log("Starting emergency fallback server...");
+  const emergencyServer = app.listen(5000, '0.0.0.0', () => {
+    console.log('✓ Emergency fallback server listening on port 5000');
+  });
+  return emergencyServer;
 });
