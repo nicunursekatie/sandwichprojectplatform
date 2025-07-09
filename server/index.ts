@@ -114,10 +114,13 @@ async function startServer() {
       log(`✓ Application startup complete - server running`);
       log(`✓ Process ID: ${process.pid}`);
       log(`✓ Server ready to accept connections`);
+      log(`✓ Server will continue running for deployment`);
       
       // Keep the process alive
       process.title = 'sandwich-project-server';
     });
+    
+    // Important: Don't return or exit here - let the server keep running
     
     // Add error handler for server listen failures
     server.on('error', (error: any) => {
@@ -189,7 +192,7 @@ async function startServer() {
       console.log('Process exit event with code: ', code);
     });
     
-    return server;
+    // Server is now listening - don't return, let it run continuously
     
   } catch (error) {
     console.error("✗ Application startup failed:", error);
@@ -221,13 +224,14 @@ startServer()
   .then((server) => {
     if (server) {
       console.log('✓ Server started successfully');
-      // Keep the process alive indefinitely
-      const keepAlive = () => {
-        setTimeout(keepAlive, 30000); // Check every 30 seconds
-      };
-      keepAlive();
+      console.log('✓ Process will remain active for deployment');
+      // Don't exit - let the server handle everything
     } else {
       console.log('⚠ Server started in minimal mode');
+      // Keep process alive in minimal mode
+      setInterval(() => {
+        console.log('Minimal server process is alive...');
+      }, 60000);
     }
   })
   .catch((error) => {
@@ -239,7 +243,7 @@ startServer()
       console.error('Continuing in production mode despite startup errors...');
       // Keep process alive even with errors in production
       setInterval(() => {
-        console.log('Server process is alive...');
+        console.log('Error recovery mode - server process is alive...');
       }, 60000);
     }
   });
