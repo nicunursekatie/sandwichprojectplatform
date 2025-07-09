@@ -42,6 +42,11 @@ async function startServer() {
   try {
     console.log("🚀 Starting The Sandwich Project server...");
     
+    // Basic health check at root - available immediately
+    app.get('/', (_req: Request, res: Response) => {
+      res.status(200).json({ status: 'ok' });
+    });
+
     // Basic health checkpoint endpoint - available immediately
     app.get('/health', (_req: Request, res: Response) => {
       res.status(200).json({ 
