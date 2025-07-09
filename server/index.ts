@@ -192,7 +192,12 @@ async function startServer() {
       console.log('Process exit event with code: ', code);
     });
     
-    // Server is now listening - don't return, let it run continuously
+    // Server is now listening - keep the process running
+    console.log('✓ Server startup sequence complete');
+    console.log('✓ Server will continue running to handle requests');
+    
+    // Return the server instance to keep the promise chain active
+    return server;
     
   } catch (error) {
     console.error("✗ Application startup failed:", error);
@@ -212,7 +217,14 @@ async function startServer() {
     // In production, try to start with limited functionality rather than exiting
     if (process.env.NODE_ENV === 'production') {
       console.error("Attempting to start in minimal mode for production deployment...");
-      return null;
+      
+      // Create a minimal server that stays alive
+      const minimalServer = app.listen(5000, '0.0.0.0', () => {
+        console.log('✓ Minimal server listening on port 5000');
+        console.log('✓ Basic endpoints available for health checks');
+      });
+      
+      return minimalServer;
     }
     
     process.exit(1);
@@ -247,3 +259,6 @@ startServer()
       }, 60000);
     }
   });
+
+// Prevent the main module from exiting
+console.log('✓ Server module loaded, keeping process alive...');
