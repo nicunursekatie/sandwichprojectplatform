@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "vite build && tsc server/index.ts --outDir dist --target ES2022 --module ES2022 --moduleResolution node --esModuleInterop --allowSyntheticDefaultImports --skipLibCheck",
+    "build": "vite build && tsc --project server/tsconfig.json",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push"
