@@ -219,22 +219,39 @@ const projectFilesUpload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Validate environment variables
+  const requiredEnvVars = ['DATABASE_URL'];
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+  }
+
   // Setup PostgreSQL session store for production-ready session persistence
   // This replaces the previous MemoryStore which was causing:
   // - Memory leaks and server crashes every ~5 minutes
   // - Session loss on server restarts
   // - "MemoryStore is not designed for a production environment" warnings
   const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: true, // Auto-create sessions table if it doesn't exist
-    ttl: 7 * 24 * 60 * 60, // 7 days TTL (in seconds for pg-simple)
-    tableName: "sessions",
-    pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes
-    errorLog: (error) => {
-      console.error("Session store error:", error);
-    },
-  });
+  
+  let sessionStore;
+  try {
+    sessionStore = new pgStore({
+      conString: process.env.DATABASE_URL,
+      createTableIfMissing: true, // Auto-create sessions table if it doesn't exist
+      ttl: 7 * 24 * 60 * 60, // 7 days TTL (in seconds for pg-simple)
+      tableName: "sessions",
+      pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes
+      errorLog: (error) => {
+        console.error("Session store error:", error);
+      },
+    });
+    
+    console.log("✓ PostgreSQL session store configured");
+  } catch (sessionStoreError) {
+    console.error("✗ Failed to configure PostgreSQL session store:", sessionStoreError);
+    throw new Error(`Sessions table creation failed during initialization: ${sessionStoreError.message}`);
+  }
 
   // Add session middleware with PostgreSQL storage
   app.use(
@@ -4690,6 +4707,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Enhanced health check endpoint for deployment monitoring
+  app.get("/health", async (req, res) => {
+    try {
+      // Test database connection
+      const { testDatabaseConnection } = await import("./db");
+      const dbStatus = await testDatabaseConnection();
+      
+      // Test basic storage operations
+      let storageStatus = true;
+      try {
+        // Quick storage test - get collection count
+        const stats = await storage.getCollectionStats();
+        storageStatus = stats !== null && stats !== undefined;
+      } catch (error) {
+        console.error("Storage health check failed:", error);
+        storageStatus = false;
+      }
+      
+      const overallHealthy = dbStatus && storageStatus;
+      
+      const health = {
+        status: overallHealthy ? "healthy" : "unhealthy",
+        timestamp: new Date().toISOString(),
+        version: "1.0.0",
+        uptime: Math.floor(process.uptime()),
+        checks: {
+          database: dbStatus ? "connected" : "disconnected",
+          storage: storageStatus ? "operational" : "error", 
+          server: "running",
+          port: 5000,
+          memory: {
+            used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+            total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024)
+          }
+        }
+      };
+      
+      res.status(overallHealthy ? 200 : 503).json(health);
+    } catch (error) {
+      console.error("Health check endpoint error:", error);
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        error: error.message,
+        checks: {
+          database: "error",
+          storage: "error",
+          server: "running", 
+          port: 5000
+        }
+      });
+    }
+  });
+
   // Committee management routes
   app.get("/api/committees", isAuthenticated, async (req: any, res) => {
     try {
@@ -5918,11 +5990,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const wss = new WebSocketServer({
     server: httpServer,
     path: "/notifications",
+    perMessageDeflate: false,
+    clientTracking: true,
+    maxPayload: 1024 * 1024, // 1MB max payload
   });
   const connectedClients = new Map<string, WebSocket[]>();
 
   wss.on("connection", (ws: WebSocket, request) => {
-    console.log("WebSocket client connected");
+    console.log("WebSocket client connected from", request.socket.remoteAddress);
 
     // Add connection state tracking
     let isAlive = true;
@@ -6023,6 +6098,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Function to broadcast new message notifications
+  // Add heartbeat to keep WebSocket connections alive
+  const heartbeat = setInterval(() => {
+    wss.clients.forEach((ws) => {
+      if (ws.isAlive === false) {
+        ws.terminate();
+        return;
+      }
+      ws.isAlive = false;
+      try {
+        ws.ping();
+      } catch (error) {
+        console.error("Error pinging WebSocket client:", error);
+        ws.terminate();
+      }
+    });
+  }, 30000); // 30 second heartbeat
+
+  // Clean up heartbeat on server shutdown
+  httpServer.on('close', () => {
+    clearInterval(heartbeat);
+  });
+
   const broadcastNewMessage = async (message: any) => {
     try {
       console.log("broadcastNewMessage called with:", message);
@@ -6620,8 +6717,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     isAuthenticated,
     async (req, res) => {
       try {
+        console.log("[CONVERSATION MESSAGES] Request received for conversation:", req.params.id);
         const user = (req as any).user;
+        console.log("[CONVERSATION MESSAGES] User object:", user ? "exists" : "missing");
         if (!user?.id) {
+          console.log("[CONVERSATION MESSAGES] No user.id found, returning 401");
           return res.status(401).json({ message: "Unauthorized" });
         }
 
@@ -6670,28 +6770,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const conversationMessages = await db
           .select()
           .from(messagesTable)
-          .where(eq(messagesTable.conversation_id, conversationId))
-          .orderBy(messagesTable.created_at);
+          .where(eq(messagesTable.conversationId, conversationId))
+          .orderBy(messagesTable.createdAt);
 
         console.log("[DEBUG] Found messages:", conversationMessages.length);
         console.log("[DEBUG] Sample message:", conversationMessages[0]);
 
         // Transform to match expected format
-        const formattedMessages = safeMessages.map((msg) => ({
+        const formattedMessages = conversationMessages.map((msg) => ({
           id: msg.id,
           content: msg.content,
-          userId: msg.user_id,
-          user_id: msg.user_id,
+          userId: msg.userId,
+          user_id: msg.userId,
           sender: msg.sender || "Unknown User",
-          createdAt: msg.created_at,
-          created_at: msg.created_at,
-          timestamp: msg.created_at,
+          createdAt: msg.createdAt,
+          created_at: msg.createdAt,
+          timestamp: msg.createdAt,
           committee: "conversation", // For compatibility
         }));
 
         res.json(formattedMessages);
       } catch (error) {
-        console.error("[API] Error fetching messages:", error);
+        console.error("[CONVERSATION MESSAGES] Full error details:", error);
+        console.error("[CONVERSATION MESSAGES] Error message:", error.message);
+        console.error("[CONVERSATION MESSAGES] Error stack:", error.stack);
         res
           .status(500)
           .json({ message: "Internal server error", details: error.message });
