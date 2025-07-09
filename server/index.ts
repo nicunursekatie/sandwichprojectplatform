@@ -56,6 +56,15 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Add root endpoint for Replit health checks (responds immediately)
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    message: 'Sandwich Platform Server is running'
+  });
+});
+
 async function startServer() {
   let server = null;
   
