@@ -109,7 +109,12 @@ async function startServer() {
       } else if (error.code === 'EACCES') {
         console.error(`Permission denied to bind to port ${port}`);
       }
-      process.exit(1);
+      // Don't exit in production - let the process stay alive
+      if (process.env.NODE_ENV === 'development') {
+        process.exit(1);
+      } else {
+        console.error('Server error in production, but keeping process alive...');
+      }
     });
     
     // Graceful shutdown handlers
@@ -119,14 +124,19 @@ async function startServer() {
       // Stop accepting new connections
       server.close(() => {
         log('HTTP server closed');
-        process.exit(0);
+        // Only exit in development
+        if (process.env.NODE_ENV === 'development') {
+          process.exit(0);
+        }
       });
 
-      // Force shutdown after 10 seconds
-      setTimeout(() => {
-        log('Forcing shutdown after timeout');
-        process.exit(1);
-      }, 10000);
+      // Force shutdown after 10 seconds (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        setTimeout(() => {
+          log('Forcing shutdown after timeout');
+          process.exit(1);
+        }, 10000);
+      }
     };
 
     // Handle termination signals
@@ -136,7 +146,12 @@ async function startServer() {
     // Handle uncaught errors
     process.on('uncaughtException', (error) => {
       console.error('Uncaught Exception:', error);
-      shutdown('uncaughtException');
+      // Only shutdown in development
+      if (process.env.NODE_ENV === 'development') {
+        shutdown('uncaughtException');
+      } else {
+        console.error('Uncaught exception in production, but keeping server alive...');
+      }
     });
 
     process.on('unhandledRejection', (reason, promise) => {
