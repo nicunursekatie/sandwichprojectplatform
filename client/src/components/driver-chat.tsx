@@ -1,321 +1,349 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { MessageCircle, Send, User, Crown, Truck, ChevronLeft, Trash2 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { useMessageReads } from "@/hooks/useMessageReads";
-import type { Driver, Message } from "@shared/schema";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
+import { CheckCircle2, Truck, User, Trash2, MoreVertical, Edit } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
-interface DriverWithContacts extends Driver {
-  contacts: any[];
+interface Message {
+  id: number;
+  content: string;
+  sender?: string;
+  userId?: string;
+  user_id?: string;
+  createdAt?: string;
+  created_at?: string;
 }
 
 export default function DriverChat() {
-  const { toast } = useToast();
   const { user } = useAuth();
-  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
-  const [newMessage, setNewMessage] = useState("");
+  const { toast } = useToast();
+  const [message, setMessage] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  
-  // Initialize read tracking hook
-  const { useAutoMarkAsRead } = useMessageReads();
 
-  // Get user profile for display name
-  const { data: userProfile } = useQuery({
-    queryKey: ["/api/auth/profile"],
-    enabled: !!user,
-  });
+  // Check if user has Driver Chat access
+  const hasDriverChatAccess = user?.permissions?.includes('driver_chat') ||
+    user?.role === 'admin' || 
+    user?.role === 'admin_coordinator' ||
+    user?.role === 'super_admin';
 
-  // Get user name from profile or fallback to email prefix
-  const getUserName = () => {
-    if (userProfile && typeof userProfile === 'object') {
-      const profile = userProfile as any;
-      if (profile.displayName) {
-        return profile.displayName;
-      }
-      if (profile.firstName) {
-        return profile.firstName;
-      }
-    }
-    if (user && typeof user === 'object' && 'email' in user && user.email) {
-      return String(user.email).split('@')[0];
-    }
-    return 'Team Member';
-  };
-
-  const canDeleteMessage = (message: Message) => {
-    const currentUser = user as any;
-    const isOwner = message.sender === getUserName();
-    const isSuperAdmin = currentUser?.role === "super_admin";
-    const isAdmin = currentUser?.role === "admin";
-    const hasModeratePermission = currentUser?.permissions?.includes("moderate_messages");
-    
-    return isOwner || isSuperAdmin || isAdmin || hasModeratePermission;
-  };
-
-  const { data: drivers = [] } = useQuery<DriverWithContacts[]>({
-    queryKey: ['/api/drivers-with-contacts'],
-  });
-
-  // Get or create driver conversation
-  const { data: driverConversation } = useQuery({
-    queryKey: ["/api/conversations/driver", selectedDriver?.id],
+  // Get all conversations to find Driver Chat
+  const { data: conversations = [] } = useQuery({
+    queryKey: ["/api/conversations"],
     queryFn: async () => {
-      if (!selectedDriver) return null;
-      const response = await apiRequest('POST', '/api/conversations', {
-        type: 'driver',
-        name: `${selectedDriver.name} Driver Chat`,
-        metadata: { driverId: selectedDriver.id }
-      });
-      return response;
+      const response = await fetch("/api/conversations");
+      if (!response.ok) {
+        throw new Error("Failed to fetch conversations");
+      }
+      const data = await response.json();
+      return data;
     },
-    enabled: !!selectedDriver,
+    enabled: !!user && hasDriverChatAccess,
   });
 
-  // Fetch messages for driver conversation
-  const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: ["/api/conversations", driverConversation?.id, "messages"],
-    enabled: !!driverConversation,
-    refetchInterval: 3000,
-  });
-  const [optimisticMessages, setOptimisticMessages] = useState<Message[] | null>(null);
-  const displayedMessages = optimisticMessages || messages;
-
-  // Auto-mark messages as read when viewing driver chat
-  useAutoMarkAsRead(
-    selectedDriver ? `driver-${selectedDriver.id}` : "", 
-    messages, 
-    !!selectedDriver
+  // Find Driver Chat conversation from the list
+  const driverConversation = conversations.find((c: any) => 
+    c.type === 'channel' && c.name === 'Driver Chat'
   );
 
-  useEffect(() => {
-    setOptimisticMessages(null);
-    if (driverConversation?.id) {
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations", driverConversation.id, "messages"] });
-    }
-  }, [driverConversation?.id]);
-
-  const sendMessageMutation = useMutation({
-    mutationFn: async (data: { content: string }) => {
-      if (!driverConversation) throw new Error("No conversation available");
-      return await apiRequest('POST', `/api/conversations/${driverConversation.id}/messages`, {
-        content: data.content
-      });
+  // Fetch driver messages from the conversation system
+  const { data: messages = [], isLoading: messagesLoading, error: messagesError } = useQuery<Message[]>({
+    queryKey: ["/api/conversations", driverConversation?.id, "messages"],
+    queryFn: async () => {
+      if (!driverConversation?.id) {
+        return [];
+      }
+      
+      const response = await fetch(`/api/conversations/${driverConversation.id}/messages`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to fetch Driver messages:', errorText);
+        throw new Error(`Failed to fetch messages: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations", driverConversation?.id, "messages"] });
-      setNewMessage("");
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to send message",
-        variant: "destructive",
-      });
-    }
+    enabled: !!driverConversation?.id && hasDriverChatAccess,
+    refetchInterval: 5000,
   });
 
+  // Post a message to Driver Chat
+  const postMessageMutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (!driverConversation?.id) {
+        throw new Error("Driver conversation not found");
+      }
+      
+      const response = await apiRequest("POST", `/api/conversations/${driverConversation.id}/messages`, {
+        content
+      });
+      
+      return response;
+    },
+    onSuccess: () => {
+      setMessage("");
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", driverConversation?.id, "messages"] });
+    },
+    onError: (error) => {
+      console.error("Failed to post message:", error);
+      toast({
+        title: "Failed to send message",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Edit message mutation
+  const editMessageMutation = useMutation({
+    mutationFn: async ({ messageId, content }: { messageId: number; content: string }) => {
+      const response = await apiRequest("PATCH", `/api/messages/${messageId}`, { content });
+      return response;
+    },
+    onSuccess: () => {
+      setEditingMessageId(null);
+      setEditContent("");
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations", driverConversation?.id, "messages"] });
+      toast({
+        title: "Message updated",
+        description: "Your message has been edited successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to edit message",
+        description: error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Delete message mutation
   const deleteMessageMutation = useMutation({
     mutationFn: async (messageId: number) => {
-      return await apiRequest('DELETE', `/api/messages/${messageId}`);
-    },
-    onMutate: async (messageId: number) => {
-      setOptimisticMessages((prev) => {
-        const base = prev || messages;
-        return base.filter((m) => m.id !== messageId);
-      });
+      const response = await apiRequest("DELETE", `/api/messages/${messageId}`);
+      return response;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/conversations", driverConversation?.id, "messages"] });
-      setOptimisticMessages(null);
       toast({
         title: "Message deleted",
-        description: "The message has been removed",
+        description: "Your message has been removed.",
       });
     },
-    onError: () => {
-      setOptimisticMessages(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/conversations", driverConversation?.id, "messages"] });
+    onError: (error) => {
       toast({
-        title: "Error",
-        description: "Failed to delete message",
+        title: "Failed to delete message",
+        description: error instanceof Error ? error.message : "An error occurred",
         variant: "destructive",
       });
-    }
+    },
   });
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim()) return;
+  // Filter out null/undefined messages and ensure we have valid data
+  const displayedMessages = (messages || []).filter((msg): msg is Message => {
+    return msg && typeof msg === 'object' && 'content' in msg;
+  });
 
-    sendMessageMutation.mutate({
-      content: newMessage.trim()
-    });
-  };
-
+  // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [displayedMessages]);
 
-  if (!selectedDriver) {
+  const handleSendMessage = () => {
+    if (message.trim() && !postMessageMutation.isPending) {
+      postMessageMutation.mutate(message.trim());
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  const startEdit = (msg: Message) => {
+    setEditingMessageId(msg.id);
+    setEditContent(msg.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingMessageId(null);
+    setEditContent("");
+  };
+
+  const saveEdit = (messageId: number) => {
+    if (editContent.trim()) {
+      editMessageMutation.mutate({ messageId, content: editContent.trim() });
+    }
+  };
+
+  const handleDelete = (messageId: number) => {
+    if (window.confirm("Are you sure you want to delete this message?")) {
+      deleteMessageMutation.mutate(messageId);
+    }
+  };
+
+  if (!user || !hasDriverChatAccess) {
     return (
-      <div className="p-6">
-        <h2 className="text-2xl font-bold mb-6 flex items-center">
-          <MessageCircle className="w-6 h-6 mr-2" />
-          Driver Communication Hub
-        </h2>
-        
-        <div className="grid gap-4">
-          {drivers.map((driver) => (
-            <Card 
-              key={driver.id} 
-              className="cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setSelectedDriver(driver)}
-            >
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Avatar className="w-10 h-10">
-                      <AvatarFallback className="text-white" style={{backgroundColor: 'var(--tsp-teal)'}}>
-                        {driver.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h3 className="font-semibold flex items-center">
-                        {driver.name}
-                        {driver.status === 'lead' && (
-                          <Crown className="w-4 h-4 ml-2 text-amber-500" />
-                        )}
-                      </h3>
-                      <p className="text-sm text-gray-600">{driver.phone || 'No phone'}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant={driver.status === 'active' ? 'default' : 'secondary'}>
-                      {driver.status}
-                    </Badge>
-                    <Truck className="w-4 h-4 text-gray-400" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Truck className="h-5 w-5" />
+            Driver Chat
+          </CardTitle>
+          <CardDescription>
+            Access restricted to drivers and coordinators
+          </CardDescription>
+        </CardHeader>
+      </Card>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-4 border-b bg-white dark:bg-gray-900">
-        <div className="flex items-center space-x-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedDriver(null)}
-            className="p-1"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Avatar className="w-8 h-8">
-            <AvatarFallback className="text-white text-sm" style={{backgroundColor: 'var(--tsp-teal)'}}>
-              {selectedDriver.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h3 className="font-semibold flex items-center">
-              {selectedDriver.name}
-              {selectedDriver.status === 'lead' && (
-                <Crown className="w-4 h-4 ml-2 text-amber-500" />
-              )}
-            </h3>
-            <p className="text-xs text-gray-600">Driver Chat</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Messages */}
-      <div className="flex-1 p-4 overflow-y-auto">
-        <div className="space-y-4">
-          {displayedMessages.length === 0 ? (
-            <div className="text-center text-gray-500 py-8">
-              <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>No messages yet. Start the conversation!</p>
+    <Card className="h-[600px] flex flex-col">
+      <CardHeader className="flex-shrink-0">
+        <CardTitle className="flex items-center gap-2">
+          <Truck className="h-5 w-5" />
+          Driver Chat
+        </CardTitle>
+        <CardDescription>
+          Coordination channel for delivery drivers
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+          {messagesLoading && <div className="text-center text-muted-foreground">Loading messages...</div>}
+          {messagesError && (
+            <div className="text-center text-destructive">
+              Error loading messages: {messagesError instanceof Error ? messagesError.message : 'Unknown error'}
             </div>
-          ) : (
-            displayedMessages.map((message) => (
-              <div key={message.id} className="flex space-x-3 group">
-                <Avatar className="w-8 h-8">
-                  <AvatarFallback className="bg-gray-500 text-white text-xs">
-                    {message.sender?.split(' ').map(n => n[0]).join('').slice(0, 2) || 'TM'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="font-medium text-sm">{message.sender}</span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(message.timestamp).toLocaleTimeString()}
-                      </span>
+          )}
+          {!messagesLoading && !messagesError && displayedMessages.length === 0 && (
+            <div className="text-center text-muted-foreground">
+              No messages yet. Start the conversation!
+            </div>
+          )}
+          {displayedMessages.map((msg) => {
+            const msgUserId = msg.userId || msg.user_id;
+            const msgCreatedAt = msg.createdAt || msg.created_at;
+            const isOwnMessage = msgUserId === user?.id;
+            
+            return (
+              <div key={msg.id} className={`flex gap-3 ${isOwnMessage ? 'justify-end' : ''}`}>
+                <div className={`flex gap-3 max-w-[80%] ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                      {isOwnMessage ? (
+                        <CheckCircle2 className="h-4 w-4 text-orange-600" />
+                      ) : (
+                        <Truck className="h-4 w-4 text-orange-600" />
+                      )}
                     </div>
-                    {/* Show delete button for message owners or super admins */}
-                    {canDeleteMessage(message) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteMessageMutation.mutate(message.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
-                        disabled={deleteMessageMutation.isPending}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    )}
                   </div>
-                  <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-                    <p className="text-sm">{message.content}</p>
+                  <div className={`space-y-1 ${isOwnMessage ? 'items-end' : ''}`}>
+                    <div className={`flex items-center gap-2 ${isOwnMessage ? 'flex-row-reverse' : ''}`}>
+                      <span className="text-sm font-medium">
+                        {msg.sender || "Driver"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {msgCreatedAt ? formatDistanceToNow(new Date(msgCreatedAt), { addSuffix: true }) : 'just now'}
+                      </span>
+                      {isOwnMessage && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <MoreVertical className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => startEdit(msg)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(msg.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
+                    {editingMessageId === msg.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          className="min-h-[60px]"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => saveEdit(msg.id)}
+                            disabled={editMessageMutation.isPending}
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={cancelEdit}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className={`rounded-lg px-3 py-2 ${
+                        isOwnMessage 
+                          ? 'bg-orange-500 text-white' 
+                          : 'bg-muted'
+                      }`}>
+                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            ))
-          )}
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
-      </div>
-
-      {/* Message Input */}
-      <div className="p-4 border-t bg-white dark:bg-gray-900 space-y-3">
-        <div className="flex items-center space-x-2">
-          <span className="text-sm font-medium text-gray-600">Posting as:</span>
-          <span className="text-sm font-semibold text-gray-800">{getUserName()}</span>
-        </div>
-        <div className="flex space-x-2">
-          <Input
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            placeholder={`Message ${selectedDriver.name}...`}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSendMessage();
-              }
-            }}
-            className="flex-1"
+        <div className="flex gap-2">
+          <Textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            placeholder="Type your message..."
+            className="min-h-[60px]"
+            disabled={postMessageMutation.isPending}
           />
-          <Button 
+          <Button
             onClick={handleSendMessage}
-            disabled={!newMessage.trim() || sendMessageMutation.isPending}
-            size="sm"
+            disabled={!message.trim() || postMessageMutation.isPending}
+            className="self-end bg-orange-500 hover:bg-orange-600"
           >
-            <Send className="w-4 h-4" />
+            Send
           </Button>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
-} 
+}
