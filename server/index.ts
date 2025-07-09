@@ -86,13 +86,10 @@ async function startServer() {
     // this serves both the API and the client.
     // It is the only port that is not firewalled.
     const port = 5000;
+    const host = "0.0.0.0";
     
-    const httpServer = server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
-      console.log(`✓ Server is running on http://0.0.0.0:${port}`);
+    const httpServer = server.listen(port, host, () => {
+      console.log(`✓ Server is running on http://${host}:${port}`);
       console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log("✓ The Sandwich Project server is ready to handle requests");
     });
@@ -143,7 +140,7 @@ async function startServer() {
     if (process.env.NODE_ENV === 'production') {
       console.log("Attempting minimal startup for production deployment...");
       const fallbackServer = app.listen(5000, '0.0.0.0', () => {
-        console.log('✓ Minimal fallback server listening on port 5000');
+        console.log('✓ Minimal fallback server listening on http://0.0.0.0:5000');
       });
       return fallbackServer;
     }
@@ -151,7 +148,7 @@ async function startServer() {
     // Don't exit in development - return a minimal server to keep process alive
     console.log("Starting minimal development server to keep process alive...");
     const minimalServer = app.listen(5000, '0.0.0.0', () => {
-      console.log('✓ Minimal development server listening on port 5000');
+      console.log('✓ Minimal development server listening on http://0.0.0.0:5000');
     });
     return minimalServer;
   }
@@ -172,7 +169,7 @@ startServer().then((server) => {
   // Instead of exiting, try to start a minimal server
   console.log("Starting emergency fallback server...");
   const emergencyServer = app.listen(5000, '0.0.0.0', () => {
-    console.log('✓ Emergency fallback server listening on port 5000');
+    console.log('✓ Emergency fallback server listening on http://0.0.0.0:5000');
   });
   return emergencyServer;
 });
