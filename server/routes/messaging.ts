@@ -342,4 +342,47 @@ router.delete("/:messageId", async (req, res) => {
   }
 });
 
+// Get all messages for a user
+router.get("/messages", async (req, res) => {
+  try {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const { contextType } = req.query;
+
+    // Set no-cache headers to prevent stale data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
+    let messages;
+    if (contextType && contextType !== 'all') {
+      messages = await messagingService.getUnreadMessages(user.id, { 
+        contextType: contextType as string 
+      });
+    } else {
+      // Get all messages for this user
+      const allUnread = await messagingService.getUnreadMessages(user.id);
+      const contextMessages = await messagingService.getContextMessages('direct', user.id);
+      messages = [...allUnread, ...contextMessages];
+    }
+
+    // Filter out messages with missing user data and provide fallbacks
+    const validMessages = messages.map(msg => ({
+      ...msg,
+      senderName: msg.senderName || msg.sender || 'Unknown User',
+      senderEmail: msg.senderEmail || undefined
+    })).filter(msg => msg.id && msg.content);
+
+    res.json({ messages: validMessages });
+  } catch (error) {
+    console.error("Error fetching messages:", error);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
+});
+
 export { router as messagingRoutes };

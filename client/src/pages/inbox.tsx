@@ -72,7 +72,7 @@ export default function InboxPage() {
   const [replyContent, setReplyContent] = useState("");
   const [showComposer, setShowComposer] = useState(false);
 
-  // Fetch all messages
+  // Fetch all messages with fresh user data
   const { data: allMessages = [], refetch: refetchMessages } = useQuery({
     queryKey: ['/api/messaging/messages', selectedTab],
     queryFn: async () => {
@@ -83,9 +83,13 @@ export default function InboxPage() {
       const response = await apiRequest('GET', endpoint);
       return (response as any).messages || [];
     },
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 30000, // Cache for 30 seconds only
+    refetchInterval: 60000, // Refetch every minute
+    refetchOnWindowFocus: true,
   });
 
-  // Fetch thread messages when a message is selected
+  // Fetch thread messages when a message is selected with fresh user data
   const { data: threadMessages = [] } = useQuery({
     queryKey: ['/api/messaging/thread', selectedMessage?.contextType, selectedMessage?.contextId],
     queryFn: async () => {
@@ -93,6 +97,9 @@ export default function InboxPage() {
       return await getContextMessages(selectedMessage.contextType, selectedMessage.contextId);
     },
     enabled: !!selectedMessage?.contextType && !!selectedMessage?.contextId,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 30000, // Cache for 30 seconds only
+    refetchOnWindowFocus: true,
   });
 
   // Handle message selection and mark as read
