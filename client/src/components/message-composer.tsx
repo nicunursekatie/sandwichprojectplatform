@@ -76,11 +76,17 @@ export function MessageComposer({
     queryKey: ["/api/users/search", recipientSearch],
     queryFn: async () => {
       if (!recipientSearch) return [];
+<<<<<<< HEAD
       const response = await apiRequest(
         "GET",
         `/api/users/search?q=${encodeURIComponent(recipientSearch)}`,
       );
       return response.users || [];
+=======
+      const response = await apiRequest('GET', `/api/users/search?q=${encodeURIComponent(recipientSearch)}`);
+      const data = await response.json();
+      return data.users || [];
+>>>>>>> de6405785d9d79cc8ce80852873fb73cadea77d3
     },
     enabled: recipientSearch.length > 1,
   });
