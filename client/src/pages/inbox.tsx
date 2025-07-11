@@ -128,9 +128,19 @@ export default function InboxPage() {
     }
   };
 
+  // Debug logging to understand invalid messages
+  console.log('Raw messages array:', allMessages);
+  console.log('Invalid messages:', allMessages?.filter(msg => !msg || !msg.senderName));
+  
+  // Filter out undefined/invalid messages first
+  const validMessages = allMessages?.filter(msg => 
+    msg && typeof msg === 'object' && msg.senderName && msg.content
+  ) || [];
+  
+  console.log('Valid messages after filtering:', validMessages);
+  
   // Filter messages based on search
-  const filteredMessages = (allMessages || []).filter((message: Message) => {
-    if (!message || typeof message !== 'object') return false;
+  const filteredMessages = validMessages.filter((message: Message) => {
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
     return (
@@ -253,7 +263,7 @@ export default function InboxPage() {
                   No messages found
                 </div>
               ) : (
-                filteredMessages.filter(message => message && typeof message === 'object').map((message: Message) => (
+                filteredMessages.map((message: Message) => (
                   <Card
                     key={message.id}
                     className={`mb-2 cursor-pointer transition-colors ${
@@ -382,7 +392,13 @@ export default function InboxPage() {
                 </div>
 
                 {/* Thread Replies */}
-                {threadMessages.filter((m: Message) => m && typeof m === 'object' && m.id !== selectedMessage?.id).map((message: Message) => (
+                {threadMessages.filter((m: Message) => 
+                  m && 
+                  typeof m === 'object' && 
+                  m.senderName && 
+                  m.content && 
+                  m.id !== selectedMessage?.id
+                ).map((message: Message) => (
                   <div 
                     key={message.id} 
                     className={`rounded-lg p-4 ${
