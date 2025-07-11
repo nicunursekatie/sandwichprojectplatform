@@ -127,14 +127,10 @@ export default function MessageNotifications({ user }: MessageNotificationsProps
         }
       };
 
-      } catch (error) {
-        console.error('Failed to create WebSocket:', error);
-        // Still allow component to function without real-time updates
-      }
-    };
-
-    // Initial connection
-    connectWebSocket();
+    } catch (error) {
+      console.error('Failed to create WebSocket:', error);
+      // Still allow component to function without real-time updates
+    }
 
     return () => {
       if (reconnectTimeoutId) {
