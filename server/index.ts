@@ -2,10 +2,6 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeDatabase } from "./db-init";
-import path from 'path';
-import cors from 'cors';
-import session from 'express-session';
-import cookieParser from 'cookie-parser';
 
 const app = express();
 app.use(express.json());
@@ -107,17 +103,13 @@ async function startServer() {
       });
     });
 
-    // Handle favicon.ico requests to prevent 404s
-    app.get('/favicon.ico', (req, res) => {
-      res.status(204).end();
-    });
-
     if (process.env.NODE_ENV === "production") {
       // In production, serve static files from the built frontend
       app.use(express.static("dist/public"));
 
       // Simple SPA fallback for production - serve index.html for non-API routes
-      app.get(/^(?!\/api).*/, (_req: Request, res: Response) => {
+      app.get(/^(?!\/api).*/, async (_req: Request, res: Response) => {
+        const path = await import("path");
         res.sendFile(path.join(process.cwd(), "dist/public/index.html"));
       });
 
@@ -171,7 +163,8 @@ async function startServer() {
             }
           } else {
             // In production, serve React app for all non-API routes
-            app.get("*", (_req: Request, res: Response) => {
+            app.get("*", async (_req: Request, res: Response) => {
+              const path = await import("path");
               const indexPath = path.join(process.cwd(), "dist/public/index.html");
               console.log(`Serving SPA for route: ${_req.path}, file: ${indexPath}`);
               res.sendFile(indexPath);
@@ -273,7 +266,7 @@ startServer()
     // Don't exit in production - try to start a minimal server instead
     if (process.env.NODE_ENV === "production") {
       console.log("Starting minimal fallback server for production...");
-      import express from 'express';
+      const express = require("express");
       const fallbackApp = express();
 
       fallbackApp.get("/", (req, res) => res.status(200).send(`
