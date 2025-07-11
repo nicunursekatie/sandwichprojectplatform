@@ -62,7 +62,8 @@ export function MessageComposer({
     queryFn: async () => {
       if (!recipientSearch) return [];
       const response = await apiRequest('GET', `/api/users/search?q=${encodeURIComponent(recipientSearch)}`);
-      return response.users || [];
+      const data = await response.json();
+      return data.users || [];
     },
     enabled: recipientSearch.length > 1,
   });
