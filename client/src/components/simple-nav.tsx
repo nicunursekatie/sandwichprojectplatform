@@ -43,7 +43,7 @@ export default function SimpleNav({ onSectionChange }: { onSectionChange: (secti
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "dashboard" },
     { id: "inbox", label: "Inbox", icon: Inbox, href: "inbox" },
     { id: "collections", label: "Collections", icon: Sandwich, href: "collections" },
-    { id: "messages", label: "Chat", icon: MessageCircle, href: "messages" },
+    { id: "chat", label: "Chat", icon: MessageCircle, href: "messages" },
     
     // Data section (filtered by permissions)
     ...(hasPermission(user, PERMISSIONS.VIEW_HOSTS) ? [{ id: "hosts", label: "Hosts", icon: Building2, href: "hosts", group: "data" }] : []),
@@ -57,8 +57,6 @@ export default function SimpleNav({ onSectionChange }: { onSectionChange: (secti
     ...(hasPermission(user, PERMISSIONS.VIEW_PROJECTS) ? [{ id: "projects", label: "Projects", icon: ClipboardList, href: "projects", group: "ops" }] : []),
     
     // Communication section  
-    ...(hasPermission(user, PERMISSIONS.VIEW_COMMITTEE) ? [{ id: "committee-chat", label: "Committee", icon: MessageCircle, href: "committee-chat", group: "comm" }] : []),
-    { id: "messages", label: "Messages", icon: MessageCircle, href: "messages", group: "comm" },
     { id: "phone-directory", label: "Directory", icon: Phone, href: "phone-directory", group: "comm" },
     ...(hasPermission(user, PERMISSIONS.VIEW_SUGGESTIONS) ? [{ id: "suggestions", label: "Suggestions", icon: Lightbulb, href: "suggestions", group: "comm" }] : []),
     
@@ -121,7 +119,7 @@ export default function SimpleNav({ onSectionChange }: { onSectionChange: (secti
         let unreadCount = 0;
         if (item.id === 'inbox') {
           unreadCount = totalUnread;
-        } else if (item.id === 'messages') {
+        } else if (item.id === 'chat' || item.id === 'messages') {
           unreadCount = unreadCounts.general;
         } else if (item.id === 'committee-chat') {
           unreadCount = unreadCounts.committee;
