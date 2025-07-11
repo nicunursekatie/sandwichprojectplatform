@@ -129,15 +129,18 @@ export default function InboxPage() {
   };
 
   // Debug logging to understand invalid messages
-  console.log('Raw messages array:', allMessages);
-  console.log('Invalid messages:', allMessages?.filter(msg => !msg || !msg.senderName));
+  console.log('Raw allMessages array:', allMessages);
+  console.log('Invalid allMessages:', allMessages?.filter(msg => !msg || !msg.senderName));
   
   // Filter out undefined/invalid messages first
-  const validMessages = allMessages?.filter(msg => 
-    msg && typeof msg === 'object' && msg.senderName && msg.content
-  ) || [];
+  const validMessages = (allMessages || [])
+    .filter(msg => msg && typeof msg === 'object' && msg.senderName && msg.content) || [];
   
   console.log('Valid messages after filtering:', validMessages);
+  
+  // Debug threadMessages too
+  console.log('Raw threadMessages array:', threadMessages);
+  console.log('Invalid threadMessages:', threadMessages?.filter(msg => !msg || !msg.senderName));
   
   // Filter messages based on search
   const filteredMessages = validMessages.filter((message: Message) => {
@@ -218,11 +221,11 @@ export default function InboxPage() {
           <div className="px-4 py-3 border-b bg-slate-50">
             <div className="flex gap-2 overflow-x-auto">
               {[
-                { id: 'all', label: 'All Messages', icon: InboxIcon, count: allMessages.length },
-                { id: 'direct', label: 'Direct', icon: MessageCircle, count: allMessages.filter((m: Message) => m.contextType === 'direct' || !m.contextType).length },
-                { id: 'suggestion', label: 'Suggestions', icon: Lightbulb, count: allMessages.filter((m: Message) => m.contextType === 'suggestion').length },
-                { id: 'project', label: 'Projects', icon: FolderOpen, count: allMessages.filter((m: Message) => m.contextType === 'project').length },
-                { id: 'task', label: 'Tasks', icon: ListTodo, count: allMessages.filter((m: Message) => m.contextType === 'task').length },
+                { id: 'all', label: 'All Messages', icon: InboxIcon, count: validMessages.length },
+                { id: 'direct', label: 'Direct', icon: MessageCircle, count: validMessages.filter((m: Message) => m && (m.contextType === 'direct' || !m.contextType)).length },
+                { id: 'suggestion', label: 'Suggestions', icon: Lightbulb, count: validMessages.filter((m: Message) => m && m.contextType === 'suggestion').length },
+                { id: 'project', label: 'Projects', icon: FolderOpen, count: validMessages.filter((m: Message) => m && m.contextType === 'project').length },
+                { id: 'task', label: 'Tasks', icon: ListTodo, count: validMessages.filter((m: Message) => m && m.contextType === 'task').length },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -392,12 +395,8 @@ export default function InboxPage() {
                 </div>
 
                 {/* Thread Replies */}
-                {threadMessages.filter((m: Message) => 
-                  m && 
-                  typeof m === 'object' && 
-                  m.senderName && 
-                  m.content && 
-                  m.id !== selectedMessage?.id
+                {((threadMessages || [])
+                  .filter(m => m && typeof m === 'object' && m.senderName && m.content && m.id !== selectedMessage?.id)
                 ).map((message: Message) => (
                   <div 
                     key={message.id} 

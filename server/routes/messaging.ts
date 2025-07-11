@@ -164,6 +164,14 @@ router.get("/unread", async (req, res) => {
       offset: parseInt(offset as string),
     });
 
+    // Debug: Check for incomplete messages before sending
+    const incompleteMessages = messages.filter(msg => !msg || !msg.senderName || !msg.content);
+    if (incompleteMessages.length > 0) {
+      console.error('Found incomplete messages being sent to frontend:', incompleteMessages);
+    }
+
+    console.log('Sending messages to frontend. Total:', messages.length, 'Valid:', messages.filter(msg => msg && msg.senderName && msg.content).length);
+
     res.json({ messages });
   } catch (error) {
     console.error("Error getting unread messages:", error);
@@ -203,6 +211,14 @@ router.get("/context/:contextType/:contextId", async (req, res) => {
         offset: parseInt(offset as string),
       }
     );
+
+    // Debug: Check for incomplete messages before sending
+    const incompleteMessages = messages.filter(msg => !msg || !msg.senderName || !msg.content);
+    if (incompleteMessages.length > 0) {
+      console.error('Found incomplete messages being sent to frontend:', incompleteMessages);
+    }
+
+    console.log('Sending messages to frontend. Total:', messages.length, 'Valid:', messages.filter(msg => msg && msg.senderName && msg.content).length);
 
     res.json({ messages });
   } catch (error) {
