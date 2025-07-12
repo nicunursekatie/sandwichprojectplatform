@@ -204,13 +204,14 @@ export default function InboxPage() {
       const mockMessage = {
         id: -1,
         senderId: 'system',
-        senderName: 'System',
-        content: `Group: ${message.groupData.name}`,
+        senderName: message.groupData.name,
+        content: `Group conversation: ${message.groupData.name}`,
         contextType: 'group',
         contextId: message.contextId,
         contextTitle: message.groupData.name,
         createdAt: new Date().toISOString(),
-        read: true
+        read: true,
+        groupData: message.groupData
       };
       setSelectedMessage(mockMessage);
     } else {
@@ -528,111 +529,118 @@ export default function InboxPage() {
             />
           </div>
         ) : selectedMessage ? (
-          <>
-            {/* Message Header */}
-            <div className="p-4 border-b">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-10 w-10">
-                    <AvatarFallback>
-                      {selectedMessage.senderName?.charAt(0) || '?'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h3 className="font-semibold">{selectedMessage.senderName || 'Unknown'}</h3>
-                    <p className="text-sm text-gray-500">
-                      {formatDistanceToNow(new Date(selectedMessage.createdAt), { addSuffix: true })}
-                      {selectedMessage.editedAt && ' (edited)'}
-                    </p>
-                  </div>
-                </div>
-                
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
-                      <Star className="h-4 w-4 mr-2" />
-                      Star
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      <Archive className="h-4 w-4 mr-2" />
-                      Archive
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-red-600">
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              
-              {selectedMessage.contextType && (
-                <div className="mt-2">
-                  <Badge variant="secondary" className="gap-1">
-                    {getContextIcon(selectedMessage.contextType)}
-                    {selectedMessage.contextTitle || selectedMessage.contextType}
-                  </Badge>
-                </div>
-              )}
-            </div>
-
-            {/* Thread Messages */}
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
-                {/* Original Message */}
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm whitespace-pre-wrap">
-                    {selectedMessage.editedContent || selectedMessage.content}
-                  </p>
-                </div>
-
-                {/* Thread Replies */}
-                {threadMessages.filter((m: Message) => m.id !== selectedMessage.id).map((message: Message) => (
-                  <div 
-                    key={message.id} 
-                    className={`rounded-lg p-4 ${
-                      message.senderId === (user as any)?.id 
-                        ? 'bg-blue-50 ml-auto max-w-[80%]' 
-                        : 'bg-gray-50 mr-auto max-w-[80%]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <p className="font-medium text-sm">{message.senderName}</p>
-                      <p className="text-xs text-gray-500">
-                        {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+          selectedMessage.contextType === 'group' ? (
+            <GroupMessaging
+              selectedGroupId={parseInt(selectedMessage.contextId)}
+              onBack={() => setSelectedMessage(null)}
+            />
+          ) : (
+            <>
+              {/* Message Header */}
+              <div className="p-4 border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-10 w-10">
+                      <AvatarFallback>
+                        {selectedMessage.senderName?.charAt(0) || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <h3 className="font-semibold">{selectedMessage.senderName || 'Unknown'}</h3>
+                      <p className="text-sm text-gray-500">
+                        {formatDistanceToNow(new Date(selectedMessage.createdAt), { addSuffix: true })}
+                        {selectedMessage.editedAt && ' (edited)'}
                       </p>
                     </div>
+                  </div>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem>
+                        <Star className="h-4 w-4 mr-2" />
+                        Star
+                      </DropdownMenuItem>
+                      <DropdownMenuItem>
+                        <Archive className="h-4 w-4 mr-2" />
+                        Archive
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-red-600">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                
+                {selectedMessage.contextType && selectedMessage.contextType !== 'group' && (
+                  <div className="mt-2">
+                    <Badge variant="secondary" className="gap-1">
+                      {getContextIcon(selectedMessage.contextType)}
+                      {selectedMessage.contextTitle || selectedMessage.contextType}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Thread Messages */}
+              <ScrollArea className="flex-1 p-4">
+                <div className="space-y-4">
+                  {/* Original Message */}
+                  <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-sm whitespace-pre-wrap">
-                      {message.editedContent || message.content}
+                      {selectedMessage.editedContent || selectedMessage.content}
                     </p>
                   </div>
-                ))}
-              </div>
-            </ScrollArea>
 
-            {/* Reply Box */}
-            <div className="p-4 border-t">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Type your reply..."
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
-                />
-                <Button 
-                  onClick={handleReply} 
-                  disabled={!replyContent.trim() || isSending}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                  {/* Thread Replies */}
+                  {threadMessages.filter((m: Message) => m.id !== selectedMessage.id).map((message: Message) => (
+                    <div 
+                      key={message.id} 
+                      className={`rounded-lg p-4 ${
+                        message.senderId === (user as any)?.id 
+                          ? 'bg-blue-50 ml-auto max-w-[80%]' 
+                          : 'bg-gray-50 mr-auto max-w-[80%]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="font-medium text-sm">{message.senderName}</p>
+                        <p className="text-xs text-gray-500">
+                          {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                        </p>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">
+                        {message.editedContent || message.content}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+
+              {/* Reply Box */}
+              <div className="p-4 border-t">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Type your reply..."
+                    value={replyContent}
+                    onChange={(e) => setReplyContent(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleReply()}
+                  />
+                  <Button 
+                    onClick={handleReply} 
+                    disabled={!replyContent.trim() || isSending}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-            </div>
-          </>
+            </>
+          )
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
