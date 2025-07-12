@@ -76,27 +76,39 @@ export default function InboxPage() {
   const { data: allMessages = [], refetch: refetchMessages } = useQuery({
     queryKey: ['/api/messaging/messages', selectedTab],
     queryFn: async () => {
-      let endpoint = '/api/messaging/messages';
-      if (selectedTab !== 'all') {
-        endpoint += `?contextType=${selectedTab}`;
+      try {
+        let endpoint = '/api/messaging/messages';
+        if (selectedTab !== 'all') {
+          endpoint += `?contextType=${selectedTab}`;
+        }
+        const response = await apiRequest('GET', endpoint);
+        return (response as any).messages || [];
+      } catch (error) {
+        console.error('Failed to fetch messages:', error);
+        return [];
       }
-      const response = await apiRequest('GET', endpoint);
-      return (response as any).messages || [];
     },
     staleTime: 0, // Always fetch fresh data
     cacheTime: 30000, // Cache for 30 seconds only
     refetchInterval: 60000, // Refetch every minute
     refetchOnWindowFocus: true,
+    // Only run if user is authenticated
+    enabled: !!user,
   });
 
   // Fetch thread messages when a message is selected with fresh user data
   const { data: threadMessages = [] } = useQuery({
     queryKey: ['/api/messaging/thread', selectedMessage?.contextType, selectedMessage?.contextId],
     queryFn: async () => {
-      if (!selectedMessage?.contextType || !selectedMessage?.contextId) return [];
-      return await getContextMessages(selectedMessage.contextType, selectedMessage.contextId);
+      try {
+        if (!selectedMessage?.contextType || !selectedMessage?.contextId) return [];
+        return await getContextMessages(selectedMessage.contextType, selectedMessage.contextId);
+      } catch (error) {
+        console.error('Failed to fetch thread messages:', error);
+        return [];
+      }
     },
-    enabled: !!selectedMessage?.contextType && !!selectedMessage?.contextId,
+    enabled: !!selectedMessage?.contextType && !!selectedMessage?.contextId && !!user,
     staleTime: 0, // Always fetch fresh data
     cacheTime: 30000, // Cache for 30 seconds only
     refetchOnWindowFocus: true,
