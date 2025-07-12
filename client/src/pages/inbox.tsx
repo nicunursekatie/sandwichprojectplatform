@@ -28,7 +28,8 @@ import {
   Reply,
   Trash2,
   Edit2,
-  Plus
+  Plus,
+  Users
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -38,6 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MessageComposer } from "@/components/message-composer";
+import { GroupMessaging } from "@/components/group-messaging";
 
 interface Message {
   id: number;
@@ -164,30 +166,32 @@ export default function InboxPage() {
       {/* Message List */}
       <div className="w-1/3 border-r flex flex-col">
         <div className="p-4 border-b">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2 mb-3">
               <InboxIcon className="h-5 w-5" />
               Inbox
             </h2>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setShowComposer(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Compose
-              </Button>
-              {unreadMessages.length > 0 && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
                 <Button
-                  variant="ghost"
+                  variant="default"
                   size="sm"
-                  onClick={() => markAllAsRead()}
+                  onClick={() => setShowComposer(true)}
                 >
-                  <CheckCheck className="h-4 w-4 mr-2" />
-                  Mark all read
+                  <Plus className="h-4 w-4 mr-2" />
+                  Compose
                 </Button>
-              )}
+                {unreadMessages.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => markAllAsRead()}
+                  >
+                    <CheckCheck className="h-4 w-4 mr-2" />
+                    Mark all read
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
           
@@ -205,11 +209,12 @@ export default function InboxPage() {
         <div className="flex-1 flex flex-col">
           {/* Custom Tab Navigation */}
           <div className="px-4 py-3 border-b bg-slate-50">
-            <div className="flex gap-2 overflow-x-auto">
+            <div className="flex gap-1 overflow-x-auto scrollbar-thin">
               {[
-                { id: 'all', label: 'All Messages', icon: InboxIcon, count: allMessages.length },
+                { id: 'all', label: 'All', icon: InboxIcon, count: allMessages.length },
                 { id: 'direct', label: 'Direct', icon: MessageCircle, count: allMessages.filter((m: Message) => m.contextType === 'direct' || !m.contextType).length },
-                { id: 'suggestion', label: 'Suggestions', icon: Lightbulb, count: allMessages.filter((m: Message) => m.contextType === 'suggestion').length },
+                { id: 'groups', label: 'Groups', icon: Users, count: 0 },
+                { id: 'suggestion', label: 'Ideas', icon: Lightbulb, count: allMessages.filter((m: Message) => m.contextType === 'suggestion').length },
                 { id: 'project', label: 'Projects', icon: FolderOpen, count: allMessages.filter((m: Message) => m.contextType === 'project').length },
                 { id: 'task', label: 'Tasks', icon: ListTodo, count: allMessages.filter((m: Message) => m.contextType === 'task').length },
               ].map((tab) => (
@@ -217,20 +222,20 @@ export default function InboxPage() {
                   key={tab.id}
                   onClick={() => setSelectedTab(tab.id)}
                   className={`
-                    flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all whitespace-nowrap
+                    flex items-center gap-1.5 px-3 py-2 rounded-lg font-medium text-xs transition-all whitespace-nowrap flex-shrink-0
                     ${selectedTab === tab.id 
                       ? 'bg-white text-[#236383] shadow-sm border border-slate-200' 
                       : 'text-slate-600 hover:text-slate-800 hover:bg-white/50'
                     }
                   `}
                 >
-                  <tab.icon className="h-4 w-4" />
+                  <tab.icon className="h-3.5 w-3.5" />
                   <span>{tab.label}</span>
                   {tab.count > 0 && (
                     <Badge 
                       variant={selectedTab === tab.id ? "default" : "secondary"}
                       className={`
-                        h-5 px-2 text-xs
+                        h-4 px-1.5 text-[10px] min-w-[16px] flex items-center justify-center
                         ${selectedTab === tab.id 
                           ? 'bg-[#236383] text-white' 
                           : 'bg-slate-200 text-slate-700'
@@ -305,7 +310,11 @@ export default function InboxPage() {
 
       {/* Message Detail */}
       <div className="flex-1 flex flex-col">
-        {showComposer ? (
+        {selectedTab === 'groups' ? (
+          <div className="h-full">
+            <GroupMessaging currentUser={user} />
+          </div>
+        ) : showComposer ? (
           <div className="p-4">
             <MessageComposer
               contextType="direct"
@@ -425,16 +434,25 @@ export default function InboxPage() {
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
-              <InboxIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p>Select a message to view</p>
-              <Button 
-                variant="outline" 
-                className="mt-4"
-                onClick={() => setShowComposer(true)}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Compose New Message
-              </Button>
+              {selectedTab === 'groups' ? (
+                <>
+                  <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>Group messaging</p>
+                </>
+              ) : (
+                <>
+                  <InboxIcon className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>Select a message to view</p>
+                  <Button 
+                    variant="outline" 
+                    className="mt-4"
+                    onClick={() => setShowComposer(true)}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Compose New Message
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
