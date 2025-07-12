@@ -86,7 +86,7 @@ export default function InboxPage() {
     sendMessage,
     isSending 
   } = useMessaging();
-  
+
   const [selectedTab, setSelectedTab] = useState("all");
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -101,7 +101,7 @@ export default function InboxPage() {
         // Get conversations
         const conversationsResponse = await apiRequest('GET', '/api/conversations?type=group');
         const conversations = Array.isArray(conversationsResponse) ? conversationsResponse : [];
-        
+
         // For each conversation, get preview data
         const groupThreads = await Promise.all(
           conversations.map(async (conv: any) => {
@@ -109,17 +109,17 @@ export default function InboxPage() {
               // Get participants
               const participantsResponse = await apiRequest('GET', `/api/conversations/${conv.id}/participants`);
               const participants = Array.isArray(participantsResponse) ? participantsResponse : [];
-              
+
               // Get recent messages
               const messagesResponse = await apiRequest('GET', `/api/conversations/${conv.id}/messages`);
               const messages = Array.isArray(messagesResponse) ? messagesResponse : [];
-              
+
               // Get unread count for this group
               const unreadResponse = await apiRequest('GET', `/api/messaging/unread?contextType=group&contextId=${conv.id}`);
               const unreadCount = unreadResponse?.count || 0;
-              
+
               const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-              
+
               return {
                 id: conv.id,
                 name: conv.name || 'Unnamed Group',
@@ -146,7 +146,7 @@ export default function InboxPage() {
             }
           })
         );
-        
+
         return groupThreads;
       } catch (error) {
         console.error('Error fetching group threads:', error);
@@ -165,7 +165,7 @@ export default function InboxPage() {
         // For groups tab, return empty array since we'll show group threads instead
         return [];
       }
-      
+
       let endpoint = '/api/messaging/messages';
       if (selectedTab !== 'all') {
         endpoint += `?contextType=${selectedTab}`;
@@ -180,7 +180,7 @@ export default function InboxPage() {
     queryKey: ['/api/messaging/thread', selectedMessage?.contextType, selectedMessage?.contextId],
     queryFn: async () => {
       if (!selectedMessage?.contextType || !selectedMessage?.contextId) return [];
-      
+
       // Handle group conversations specially
       if (selectedMessage.contextType === 'group') {
         try {
@@ -191,7 +191,7 @@ export default function InboxPage() {
           return [];
         }
       }
-      
+
       return await getContextMessages(selectedMessage.contextType, selectedMessage.contextId);
     },
     enabled: !!selectedMessage?.contextType && !!selectedMessage?.contextId,
@@ -234,7 +234,7 @@ export default function InboxPage() {
         const response = await apiRequest('POST', `/api/conversations/${selectedMessage.contextId}/messages`, {
           content: replyContent
         });
-        
+
         // Invalidate group thread queries
         queryClient.invalidateQueries({ 
           queryKey: ['/api/messaging/thread', selectedMessage.contextType, selectedMessage.contextId] 
@@ -250,7 +250,7 @@ export default function InboxPage() {
           contextId: selectedMessage.contextId,
         });
       }
-      
+
       setReplyContent("");
       refetchMessages();
       toast({ description: "Reply sent successfully" });
@@ -312,7 +312,7 @@ export default function InboxPage() {
     }
   };
 
-  
+
 
   return (
     <div className="flex h-[calc(100vh-64px)]">
@@ -347,7 +347,7 @@ export default function InboxPage() {
               </div>
             </div>
           </div>
-          
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
@@ -412,7 +412,7 @@ export default function InboxPage() {
               ) : (
                 filteredMessages.map((message: any) => {
                   const isGroupThread = message.groupData;
-                  
+
                   return (
                     <Card
                       key={message.id}
@@ -454,7 +454,7 @@ export default function InboxPage() {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* Group thread preview */}
                         {isGroupThread ? (
                           <div>
@@ -496,7 +496,7 @@ export default function InboxPage() {
                             <p className="text-sm text-gray-700 line-clamp-2 mb-2">
                               {message.editedContent || message.content}
                             </p>
-                            
+
                             {message.contextType && message.contextType !== 'group' && (
                               <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getContextColor(message.contextType)}`}>
                                 {getContextIcon(message.contextType)}
@@ -553,7 +553,7 @@ export default function InboxPage() {
                       </p>
                     </div>
                   </div>
-                  
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon">
@@ -577,7 +577,7 @@ export default function InboxPage() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                
+
                 {selectedMessage.contextType && selectedMessage.contextType !== 'group' && (
                   <div className="mt-2">
                     <Badge variant="secondary" className="gap-1">
