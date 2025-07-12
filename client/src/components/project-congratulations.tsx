@@ -117,21 +117,19 @@ export default function ProjectCongratulations({
         {/* Display existing congratulations */}
         {congratulations && congratulations.length > 0 && (
           <div className="space-y-3 max-h-48 overflow-y-auto">
-            {congratulations
-              .filter((congrats) => congrats.celebrationData && congrats.celebrationData.senderName)
-              .map((congrats) => (
+            {congratulations.map((congrats) => (
               <div key={congrats.id} className="flex items-start gap-3 p-3 bg-white rounded-lg border">
                 <Avatar className="w-8 h-8">
                   <AvatarFallback className="bg-teal-100 text-teal-700 text-sm">
-                    {congrats.celebrationData?.senderName?.charAt(0) || '?'}
+                    {congrats.celebrationData.senderName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="font-medium text-sm text-gray-900">
-                      {congrats.celebrationData?.senderName || 'Unknown'}
+                      {congrats.celebrationData.senderName}
                     </span>
-                    <span className="text-lg">{congrats.celebrationData?.emoji || '🎉'}</span>
+                    <span className="text-lg">{congrats.celebrationData.emoji}</span>
                     <span className="text-xs text-gray-500">
                       {new Date(congrats.createdAt).toLocaleDateString()}
                     </span>

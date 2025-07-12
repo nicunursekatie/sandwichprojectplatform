@@ -72,46 +72,27 @@ export default function InboxPage() {
   const [replyContent, setReplyContent] = useState("");
   const [showComposer, setShowComposer] = useState(false);
 
-  // Fetch all messages with fresh user data
+  // Fetch all messages
   const { data: allMessages = [], refetch: refetchMessages } = useQuery({
     queryKey: ['/api/messaging/messages', selectedTab],
     queryFn: async () => {
-      try {
-        let endpoint = '/api/messaging/messages';
-        if (selectedTab !== 'all') {
-          endpoint += `?contextType=${selectedTab}`;
-        }
-        const response = await apiRequest('GET', endpoint);
-        return (response as any).messages || [];
-      } catch (error) {
-        console.error('Failed to fetch messages:', error);
-        return [];
+      let endpoint = '/api/messaging/messages';
+      if (selectedTab !== 'all') {
+        endpoint += `?contextType=${selectedTab}`;
       }
+      const response = await apiRequest('GET', endpoint);
+      return (response as any).messages || [];
     },
-    staleTime: 0, // Always fetch fresh data
-    cacheTime: 30000, // Cache for 30 seconds only
-    refetchInterval: 60000, // Refetch every minute
-    refetchOnWindowFocus: true,
-    // Only run if user is authenticated
-    enabled: !!user,
   });
 
-  // Fetch thread messages when a message is selected with fresh user data
+  // Fetch thread messages when a message is selected
   const { data: threadMessages = [] } = useQuery({
     queryKey: ['/api/messaging/thread', selectedMessage?.contextType, selectedMessage?.contextId],
     queryFn: async () => {
-      try {
-        if (!selectedMessage?.contextType || !selectedMessage?.contextId) return [];
-        return await getContextMessages(selectedMessage.contextType, selectedMessage.contextId);
-      } catch (error) {
-        console.error('Failed to fetch thread messages:', error);
-        return [];
-      }
+      if (!selectedMessage?.contextType || !selectedMessage?.contextId) return [];
+      return await getContextMessages(selectedMessage.contextType, selectedMessage.contextId);
     },
-    enabled: !!selectedMessage?.contextType && !!selectedMessage?.contextId && !!user,
-    staleTime: 0, // Always fetch fresh data
-    cacheTime: 30000, // Cache for 30 seconds only
-    refetchOnWindowFocus: true,
+    enabled: !!selectedMessage?.contextType && !!selectedMessage?.contextId,
   });
 
   // Handle message selection and mark as read
@@ -147,28 +128,14 @@ export default function InboxPage() {
     }
   };
 
-  // Debug logging to understand invalid messages
-  console.log('Raw allMessages array:', allMessages);
-  console.log('Invalid allMessages:', allMessages?.filter(msg => !msg || !msg.senderName));
-  
-  // Filter out undefined/invalid messages first
-  const validMessages = (allMessages || [])
-    .filter(msg => msg && typeof msg === 'object' && msg.senderName && msg.content) || [];
-  
-  console.log('Valid messages after filtering:', validMessages);
-  
-  // Debug threadMessages too
-  console.log('Raw threadMessages array:', threadMessages);
-  console.log('Invalid threadMessages:', threadMessages?.filter(msg => !msg || !msg.senderName));
-  
   // Filter messages based on search
-  const filteredMessages = validMessages.filter((message: Message) => {
+  const filteredMessages = allMessages.filter((message: Message) => {
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
     return (
-      (message.content || '').toLowerCase().includes(searchLower) ||
-      (message.senderName || '').toLowerCase().includes(searchLower) ||
-      (message.contextTitle || '').toLowerCase().includes(searchLower)
+      message.content.toLowerCase().includes(searchLower) ||
+      message.senderName?.toLowerCase().includes(searchLower) ||
+      message.contextTitle?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -240,11 +207,11 @@ export default function InboxPage() {
           <div className="px-4 py-3 border-b bg-slate-50">
             <div className="flex gap-2 overflow-x-auto">
               {[
-                { id: 'all', label: 'All Messages', icon: InboxIcon, count: validMessages.length },
-                { id: 'direct', label: 'Direct', icon: MessageCircle, count: validMessages.filter((m: Message) => m && (m.contextType === 'direct' || !m.contextType)).length },
-                { id: 'suggestion', label: 'Suggestions', icon: Lightbulb, count: validMessages.filter((m: Message) => m && m.contextType === 'suggestion').length },
-                { id: 'project', label: 'Projects', icon: FolderOpen, count: validMessages.filter((m: Message) => m && m.contextType === 'project').length },
-                { id: 'task', label: 'Tasks', icon: ListTodo, count: validMessages.filter((m: Message) => m && m.contextType === 'task').length },
+                { id: 'all', label: 'All Messages', icon: InboxIcon, count: allMessages.length },
+                { id: 'direct', label: 'Direct', icon: MessageCircle, count: allMessages.filter((m: Message) => m.contextType === 'direct' || !m.contextType).length },
+                { id: 'suggestion', label: 'Suggestions', icon: Lightbulb, count: allMessages.filter((m: Message) => m.contextType === 'suggestion').length },
+                { id: 'project', label: 'Projects', icon: FolderOpen, count: allMessages.filter((m: Message) => m.contextType === 'project').length },
+                { id: 'task', label: 'Tasks', icon: ListTodo, count: allMessages.filter((m: Message) => m.contextType === 'task').length },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -300,19 +267,19 @@ export default function InboxPage() {
                         <div className="flex items-center gap-2">
                           <Avatar className="h-8 w-8">
                             <AvatarFallback>
-                              {message?.senderName?.charAt(0) || '?'}
+                              {message.senderName?.charAt(0) || '?'}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <p className="font-medium text-sm">
-                              {message?.senderName || 'Unknown'}
+                              {message.senderName || 'Unknown'}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {message?.createdAt ? formatDistanceToNow(new Date(message.createdAt), { addSuffix: true }) : 'Unknown time'}
+                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                             </p>
                           </div>
                         </div>
-                        {!message?.read && (
+                        {!message.read && (
                           <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
                         )}
                       </div>
@@ -414,9 +381,7 @@ export default function InboxPage() {
                 </div>
 
                 {/* Thread Replies */}
-                {((threadMessages || [])
-                  .filter(m => m && typeof m === 'object' && m.senderName && m.content && m.id !== selectedMessage?.id)
-                ).map((message: Message) => (
+                {threadMessages.filter((m: Message) => m.id !== selectedMessage.id).map((message: Message) => (
                   <div 
                     key={message.id} 
                     className={`rounded-lg p-4 ${
@@ -426,13 +391,13 @@ export default function InboxPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-2">
-                      <p className="font-medium text-sm">{message?.senderName || 'Unknown'}</p>
+                      <p className="font-medium text-sm">{message.senderName}</p>
                       <p className="text-xs text-gray-500">
-                        {message?.createdAt ? formatDistanceToNow(new Date(message.createdAt), { addSuffix: true }) : 'Unknown time'}
+                        {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                       </p>
                     </div>
                     <p className="text-sm whitespace-pre-wrap">
-                      {message?.editedContent || message?.content || ''}
+                      {message.editedContent || message.content}
                     </p>
                   </div>
                 ))}
