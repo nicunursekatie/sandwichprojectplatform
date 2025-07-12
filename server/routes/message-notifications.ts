@@ -2,6 +2,7 @@ import { Request, Response, Express } from "express";
 import { eq, sql, and } from "drizzle-orm";
 import { messages, conversations, conversationParticipants } from "../../shared/schema";
 import { db } from "../db";
+import { isAuthenticated } from "../temp-auth";
 
 // Helper function to check if user has permission for specific chat type
 function checkUserChatPermission(user: any, chatType: string): boolean {
@@ -159,14 +160,6 @@ const markAllRead = async (req: Request, res: Response) => {
 
 // Register routes function
 export function registerMessageNotificationRoutes(app: Express) {
-  const isAuthenticated = (req: any, res: any, next: any) => {
-    if (req.user) {
-      next();
-    } else {
-      res.status(401).json({ message: "Unauthorized" });
-    }
-  };
-
   app.get("/api/message-notifications/unread-counts", isAuthenticated, getUnreadCounts);
   app.post("/api/message-notifications/mark-read", isAuthenticated, markMessagesRead);
   app.post("/api/message-notifications/mark-all-read", isAuthenticated, markAllRead);
