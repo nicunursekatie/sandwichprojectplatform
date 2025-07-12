@@ -39,7 +39,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { MessageComposer } from "@/components/message-composer";
-import { GroupMessaging } from "@/components/group-messaging";
+import { GroupConversation } from "@/components/group-conversation";
 
 interface GroupThread {
   id: number;
@@ -530,9 +530,12 @@ export default function InboxPage() {
           </div>
         ) : selectedMessage ? (
           selectedMessage.contextType === 'group' ? (
-            <GroupMessaging
-              selectedGroupId={parseInt(selectedMessage.contextId)}
+            <GroupConversation
+              groupId={parseInt(selectedMessage.contextId)}
+              groupName={selectedMessage.senderName || 'Group Chat'}
+              groupDescription={selectedMessage.groupData?.description}
               onBack={() => setSelectedMessage(null)}
+              currentUser={user}
             />
           ) : (
             <>
