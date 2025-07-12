@@ -72,22 +72,30 @@ export function MessageComposer({
   const [recipientSearch, setRecipientSearch] = useState("");
 
   // Fetch users for recipient selection
-  const { data: allUsers = [], isError: usersError } = useQuery({
+  const { data: allUsers = [], isError: usersError, isLoading: usersLoading } = useQuery({
     queryKey: ["/api/users"],
     queryFn: async () => {
       try {
         const response = await apiRequest("GET", "/api/users");
+        console.log("Users fetched successfully:", response);
         return Array.isArray(response) ? response : [];
       } catch (error: any) {
+        console.error("Failed to fetch users:", error);
         // If user doesn't have permission to view users, show a helpful message
         if (error.status === 403) {
           console.warn("User doesn't have permission to view all users for messaging");
         }
-        console.error("Failed to fetch users:", error);
         return [];
       }
     },
-    retry: false, // Don't retry if there's a permission error
+    retry: (failureCount, error: any) => {
+      // Retry up to 3 times for network errors, but not for permission errors
+      if (error?.status === 403 || error?.status === 401) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+    refetchOnWindowFocus: false,
   });
 
   // Filter users based on search query
@@ -206,28 +214,38 @@ export function MessageComposer({
                   value={recipientSearch}
                   onValueChange={setRecipientSearch}
                 />
-                <CommandEmpty>No users found.</CommandEmpty>
+                <CommandEmpty>
+                  {usersLoading ? "Loading users..." : "No users found."}
+                </CommandEmpty>
                 <CommandGroup>
-                  {users.map((user: any) => (
+                  {usersLoading ? (
+                    <div className="p-2 text-sm text-muted-foreground">Loading users...</div>
+                  ) : users.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      {usersError ? "Failed to load users" : "No users available"}
+                    </div>
+                  ) : (
+                    users.map((user: any) => (
                     <CommandItem
-                      key={user.id}
-                      onSelect={() =>
-                        addRecipient({ id: user.id, name: getUserDisplayName(user) })
-                      }
-                    >
-                      <Avatar className="h-6 w-6 mr-2">
-                        <AvatarFallback>
-                          {getUserDisplayName(user)?.charAt(0) || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span>{getUserDisplayName(user)}</span>
-                      {user.email && (
-                        <span className="text-xs text-muted-foreground ml-2">
-                          ({user.email})
-                        </span>
-                      )}
-                    </CommandItem>
-                  ))}
+                        key={user.id}
+                        onSelect={() =>
+                          addRecipient({ id: user.id, name: getUserDisplayName(user) })
+                        }
+                      >
+                        <Avatar className="h-6 w-6 mr-2">
+                          <AvatarFallback>
+                            {getUserDisplayName(user)?.charAt(0) || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span>{getUserDisplayName(user)}</span>
+                        {user.email && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            ({user.email})
+                          </span>
+                        )}
+                      </CommandItem>
+                    ))
+                  )}
                 </CommandGroup>
               </Command>
             </PopoverContent>
@@ -329,31 +347,41 @@ export function MessageComposer({
                   value={recipientSearch}
                   onValueChange={setRecipientSearch}
                 />
-                <CommandEmpty>No users found.</CommandEmpty>
+                <CommandEmpty>
+                  {usersLoading ? "Loading users..." : "No users found."}
+                </CommandEmpty>
                 <CommandGroup>
-                  {users.map((user: any) => (
-                    <CommandItem
-                      key={user.id}
-                      onSelect={() =>
-                        addRecipient({ id: user.id, name: getUserDisplayName(user) })
-                      }
-                      className="cursor-pointer"
-                    >
-                      <Avatar className="h-8 w-8 mr-3">
-                        <AvatarFallback>
-                          {getUserDisplayName(user)?.charAt(0) || "?"}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1">
-                        <p className="font-medium">{getUserDisplayName(user)}</p>
-                        {user.email && (
-                          <p className="text-sm text-muted-foreground">
-                            {user.email}
-                          </p>
-                        )}
-                      </div>
-                    </CommandItem>
-                  ))}
+                  {usersLoading ? (
+                    <div className="p-2 text-sm text-muted-foreground">Loading users...</div>
+                  ) : users.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      {usersError ? "Failed to load users" : "No users available"}
+                    </div>
+                  ) : (
+                    users.map((user: any) => (
+                      <CommandItem
+                        key={user.id}
+                        onSelect={() =>
+                          addRecipient({ id: user.id, name: getUserDisplayName(user) })
+                        }
+                        className="cursor-pointer"
+                      >
+                        <Avatar className="h-8 w-8 mr-3">
+                          <AvatarFallback>
+                            {getUserDisplayName(user)?.charAt(0) || "?"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1">
+                          <p className="font-medium">{getUserDisplayName(user)}</p>
+                          {user.email && (
+                            <p className="text-sm text-muted-foreground">
+                              {user.email}
+                            </p>
+                          )}
+                        </div>
+                      </CommandItem>
+                    ))
+                  )}
                 </CommandGroup>
               </Command>
             </PopoverContent>
