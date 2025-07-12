@@ -238,6 +238,35 @@ export function GroupConversation({ groupId, groupName, groupDescription, onBack
                   {groupMembers.length} members
                 </Badge>
               </div>
+              
+              {/* Member List */}
+              {groupMembers.length > 0 && (
+                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">Members:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {groupMembers.map((member) => (
+                      <div key={member.userId} className="flex items-center gap-1.5 bg-white dark:bg-gray-600 px-2 py-1 rounded-md text-xs">
+                        <Avatar className="h-4 w-4">
+                          <AvatarFallback className="text-xs">
+                            {member.firstName?.[0] || member.email?.[0] || '?'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-gray-700 dark:text-gray-200">
+                          {member.firstName && member.lastName 
+                            ? `${member.firstName} ${member.lastName}`
+                            : member.firstName || member.email?.split('@')[0] || 'Member'
+                          }
+                        </span>
+                        {member.role && member.role !== 'member' && (
+                          <Badge variant="secondary" className="text-xs px-1 py-0 h-4">
+                            {member.role}
+                          </Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -258,12 +287,12 @@ export function GroupConversation({ groupId, groupName, groupDescription, onBack
                 <div className="flex gap-3">
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className="text-xs">
-                      {getUserInitials(message.userId)}
+                      {message.sender ? message.sender.charAt(0).toUpperCase() : getUserInitials(message.userId)}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm">{getUserDisplayName(message.userId)}</span>
+                      <span className="font-medium text-sm">{message.sender || getUserDisplayName(message.userId)}</span>
                       <span className="text-xs text-gray-500">
                         {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
                       </span>
