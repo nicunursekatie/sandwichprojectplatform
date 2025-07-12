@@ -93,10 +93,79 @@ export default function InboxPage() {
   const [replyContent, setReplyContent] = useState("");
   const [showComposer, setShowComposer] = useState(false);
 
+  // Fetch group threads for the "groups" tab
+  const { data: groupThreads = [] } = useQuery<GroupThread[]>({
+    queryKey: ['/api/conversations/groups-with-preview'],
+    queryFn: async () => {
+      try {
+        // Get conversations
+        const conversationsResponse = await apiRequest('GET', '/api/conversations?type=group');
+        const conversations = Array.isArray(conversationsResponse) ? conversationsResponse : [];
+        
+        // For each conversation, get preview data
+        const groupThreads = await Promise.all(
+          conversations.map(async (conv: any) => {
+            try {
+              // Get participants
+              const participantsResponse = await apiRequest('GET', `/api/conversations/${conv.id}/participants`);
+              const participants = Array.isArray(participantsResponse) ? participantsResponse : [];
+              
+              // Get recent messages
+              const messagesResponse = await apiRequest('GET', `/api/conversations/${conv.id}/messages`);
+              const messages = Array.isArray(messagesResponse) ? messagesResponse : [];
+              
+              // Get unread count for this group
+              const unreadResponse = await apiRequest('GET', `/api/messaging/unread?contextType=group&contextId=${conv.id}`);
+              const unreadCount = unreadResponse?.count || 0;
+              
+              const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+              
+              return {
+                id: conv.id,
+                name: conv.name || 'Unnamed Group',
+                description: conv.description,
+                memberCount: participants.length,
+                unreadCount,
+                lastMessage: lastMessage ? {
+                  content: lastMessage.content,
+                  senderName: lastMessage.sender || 'Unknown',
+                  createdAt: lastMessage.createdAt
+                } : undefined,
+                members: participants.slice(0, 5) // Show first 5 members for preview
+              };
+            } catch (error) {
+              console.error(`Error fetching data for group ${conv.id}:`, error);
+              return {
+                id: conv.id,
+                name: conv.name || 'Unnamed Group',
+                description: conv.description,
+                memberCount: 0,
+                unreadCount: 0,
+                members: []
+              };
+            }
+          })
+        );
+        
+        return groupThreads;
+      } catch (error) {
+        console.error('Error fetching group threads:', error);
+        return [];
+      }
+    },
+    refetchInterval: 30000, // Refresh every 30 seconds
+    enabled: selectedTab === 'groups' || selectedTab === 'all',
+  });
+
   // Fetch all messages
   const { data: allMessages = [], refetch: refetchMessages } = useQuery({
     queryKey: ['/api/messaging/messages', selectedTab],
     queryFn: async () => {
+      if (selectedTab === 'groups') {
+        // For groups tab, return empty array since we'll show group threads instead
+        return [];
+      }
+      
       let endpoint = '/api/messaging/messages';
       if (selectedTab !== 'all') {
         endpoint += `?contextType=${selectedTab}`;
@@ -129,13 +198,29 @@ export default function InboxPage() {
   });
 
   // Handle message selection and mark as read
-  const handleSelectMessage = async (message: Message) => {
-    setSelectedMessage(message);
-    setShowComposer(false); // Close composer when selecting a message
-    if (!message.read) {
-      await markAsRead(message.id);
-      refetchMessages();
+  const handleSelectMessage = async (message: any) => {
+    // Handle group thread selection
+    if (message.contextType === 'group' && message.groupData) {
+      const mockMessage = {
+        id: -1,
+        senderId: 'system',
+        senderName: 'System',
+        content: `Group: ${message.groupData.name}`,
+        contextType: 'group',
+        contextId: message.contextId,
+        contextTitle: message.groupData.name,
+        createdAt: new Date().toISOString(),
+        read: true
+      };
+      setSelectedMessage(mockMessage);
+    } else {
+      setSelectedMessage(message);
+      if (!message.read) {
+        await markAsRead(message.id);
+        refetchMessages();
+      }
     }
+    setShowComposer(false); // Close composer when selecting a message
   };
 
   // Handle reply
@@ -176,8 +261,27 @@ export default function InboxPage() {
     }
   };
 
+  // Convert group threads to message-like objects for display
+  const groupThreadMessages = groupThreads.map(group => ({
+    id: `group-${group.id}`,
+    senderId: 'system',
+    senderName: group.name,
+    content: group.lastMessage?.content || 'No messages yet',
+    contextType: 'group' as const,
+    contextId: group.id.toString(),
+    contextTitle: group.name,
+    createdAt: group.lastMessage?.createdAt || new Date().toISOString(),
+    read: group.unreadCount === 0,
+    groupData: group // Store the full group data
+  }));
+
+  // Combine messages based on selected tab
+  const displayMessages = selectedTab === 'groups' ? groupThreadMessages : 
+                          selectedTab === 'all' ? [...allMessages, ...groupThreadMessages] : 
+                          allMessages;
+
   // Filter messages based on search
-  const filteredMessages = allMessages.filter((message: Message) => {
+  const filteredMessages = displayMessages.filter((message: any) => {
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
     return (
@@ -207,177 +311,7 @@ export default function InboxPage() {
     }
   };
 
-  // GroupThreadsList component for displaying groups as inbox threads
-  const GroupThreadsList = () => {
-    // Fetch groups with conversation data
-    const { data: groupThreads = [], isLoading: groupsLoading } = useQuery<GroupThread[]>({
-      queryKey: ['/api/conversations/groups-with-preview'],
-      queryFn: async () => {
-        try {
-          // Get conversations
-          const conversationsResponse = await apiRequest('GET', '/api/conversations?type=group');
-          const conversations = Array.isArray(conversationsResponse) ? conversationsResponse : [];
-          
-          // For each conversation, get preview data
-          const groupThreads = await Promise.all(
-            conversations.map(async (conv: any) => {
-              try {
-                // Get participants
-                const participantsResponse = await apiRequest('GET', `/api/conversations/${conv.id}/participants`);
-                const participants = Array.isArray(participantsResponse) ? participantsResponse : [];
-                
-                // Get recent messages
-                const messagesResponse = await apiRequest('GET', `/api/conversations/${conv.id}/messages`);
-                const messages = Array.isArray(messagesResponse) ? messagesResponse : [];
-                
-                // Get unread count for this group
-                const unreadResponse = await apiRequest('GET', `/api/messaging/unread?contextType=group&contextId=${conv.id}`);
-                const unreadCount = unreadResponse?.count || 0;
-                
-                const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
-                
-                return {
-                  id: conv.id,
-                  name: conv.name || 'Unnamed Group',
-                  description: conv.description,
-                  memberCount: participants.length,
-                  unreadCount,
-                  lastMessage: lastMessage ? {
-                    content: lastMessage.content,
-                    senderName: lastMessage.sender || 'Unknown',
-                    createdAt: lastMessage.createdAt
-                  } : undefined,
-                  members: participants.slice(0, 5) // Show first 5 members for preview
-                };
-              } catch (error) {
-                console.error(`Error fetching data for group ${conv.id}:`, error);
-                return {
-                  id: conv.id,
-                  name: conv.name || 'Unnamed Group',
-                  description: conv.description,
-                  memberCount: 0,
-                  unreadCount: 0,
-                  members: []
-                };
-              }
-            })
-          );
-          
-          return groupThreads;
-        } catch (error) {
-          console.error('Error fetching group threads:', error);
-          return [];
-        }
-      },
-      refetchInterval: 30000, // Refresh every 30 seconds
-    });
-
-    const handleSelectGroupThread = async (groupThread: GroupThread) => {
-      // Set this group thread as the selected message context
-      const mockMessage = {
-        id: -1, // Use negative ID to indicate this is a group thread
-        senderId: 'system',
-        senderName: 'System',
-        content: `Group: ${groupThread.name}`,
-        contextType: 'group',
-        contextId: groupThread.id.toString(),
-        contextTitle: groupThread.name,
-        createdAt: new Date().toISOString(),
-        read: true
-      };
-      
-      setSelectedMessage(mockMessage);
-      setShowComposer(false);
-    };
-
-    if (groupsLoading) {
-      return (
-        <div className="text-center py-8 text-gray-500">
-          <Users className="h-8 w-8 mx-auto mb-2" />
-          <p>Loading groups...</p>
-        </div>
-      );
-    }
-
-    if (groupThreads.length === 0) {
-      return (
-        <div className="text-center py-8 text-gray-500">
-          <Users className="h-8 w-8 mx-auto mb-2" />
-          <p>No group conversations found</p>
-          <p className="text-xs">Groups will appear here when you're added to them</p>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-3">
-        {groupThreads.map((group) => (
-          <Card
-            key={group.id}
-            className="cursor-pointer transition-colors hover:bg-gray-50 border-l-4 border-l-transparent hover:border-l-blue-300"
-            onClick={() => handleSelectGroupThread(group)}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold truncate">{group.name}</h4>
-                    {group.unreadCount > 0 && (
-                      <Badge variant="destructive" className="h-5 min-w-[20px] text-xs">
-                        {group.unreadCount}
-                      </Badge>
-                    )}
-                  </div>
-                  {group.description && (
-                    <p className="text-sm text-gray-600 truncate mb-2">{group.description}</p>
-                  )}
-                </div>
-              </div>
-              
-              {/* Last message preview */}
-              {group.lastMessage && (
-                <div className="mb-3">
-                  <p className="text-sm text-gray-700 line-clamp-2">
-                    <span className="font-medium">{group.lastMessage.senderName}:</span>{' '}
-                    {group.lastMessage.content}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {formatDistanceToNow(new Date(group.lastMessage.createdAt), { addSuffix: true })}
-                  </p>
-                </div>
-              )}
-              
-              {/* Member info and count */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">{group.memberCount} members</span>
-                </div>
-                
-                {/* Member avatars preview */}
-                {group.members.length > 0 && (
-                  <div className="flex -space-x-2">
-                    {group.members.slice(0, 3).map((member, index) => (
-                      <Avatar key={member.userId} className="h-6 w-6 border border-white">
-                        <AvatarFallback className="text-xs">
-                          {member.firstName?.[0] || member.email?.[0] || '?'}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {group.memberCount > 3 && (
-                      <div className="h-6 w-6 bg-gray-200 rounded-full border border-white flex items-center justify-center">
-                        <span className="text-xs text-gray-600">+{group.memberCount - 3}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  };
+  
 
   return (
     <div className="flex h-[calc(100vh-64px)]">
@@ -429,9 +363,9 @@ export default function InboxPage() {
           <div className="px-4 py-3 border-b bg-slate-50">
             <div className="flex gap-1 overflow-x-auto scrollbar-thin">
               {[
-                { id: 'all', label: 'All', icon: InboxIcon, count: allMessages.length },
+                { id: 'all', label: 'All', icon: InboxIcon, count: allMessages.length + groupThreads.length },
                 { id: 'direct', label: 'Direct', icon: MessageCircle, count: allMessages.filter((m: Message) => m.contextType === 'direct' || !m.contextType).length },
-                { id: 'groups', label: 'Groups', icon: Users, count: allMessages.filter((m: Message) => m.contextType === 'group').length },
+                { id: 'groups', label: 'Groups', icon: Users, count: groupThreads.length },
                 { id: 'suggestion', label: 'Ideas', icon: Lightbulb, count: allMessages.filter((m: Message) => m.contextType === 'suggestion').length },
                 { id: 'project', label: 'Projects', icon: FolderOpen, count: allMessages.filter((m: Message) => m.contextType === 'project').length },
                 { id: 'task', label: 'Tasks', icon: ListTodo, count: allMessages.filter((m: Message) => m.contextType === 'task').length },
@@ -475,51 +409,105 @@ export default function InboxPage() {
                   No messages found
                 </div>
               ) : (
-                filteredMessages.map((message: Message) => (
-                  <Card
-                    key={message.id}
-                    className={`mb-2 cursor-pointer transition-colors ${
-                      selectedMessage?.id === message.id 
-                        ? 'bg-blue-50 border-blue-300' 
-                        : 'hover:bg-gray-50'
-                    } ${!message.read ? 'border-l-4 border-l-blue-500' : ''}`}
-                    onClick={() => handleSelectMessage(message)}
-                  >
-                    <CardContent className="p-3">
-                      <div className="flex items-start justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback>
-                              {message.senderName?.charAt(0) || '?'}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium text-sm">
-                              {message.senderName || 'Unknown'}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
-                            </p>
+                filteredMessages.map((message: any) => {
+                  const isGroupThread = message.groupData;
+                  
+                  return (
+                    <Card
+                      key={message.id}
+                      className={`mb-2 cursor-pointer transition-colors ${
+                        selectedMessage?.contextId === message.contextId && selectedMessage?.contextType === message.contextType
+                          ? 'bg-blue-50 border-blue-300' 
+                          : 'hover:bg-gray-50'
+                      } ${!message.read ? 'border-l-4 border-l-blue-500' : ''}`}
+                      onClick={() => handleSelectMessage(message)}
+                    >
+                      <CardContent className="p-3">
+                        <div className="flex items-start justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback>
+                                {isGroupThread ? <Users className="h-4 w-4" /> : (message.senderName?.charAt(0) || '?')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium text-sm">
+                                {message.senderName || 'Unknown'}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {isGroupThread && message.groupData.lastMessage ? 
+                                  formatDistanceToNow(new Date(message.groupData.lastMessage.createdAt), { addSuffix: true }) :
+                                  formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })
+                                }
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isGroupThread && message.groupData.unreadCount > 0 && (
+                              <Badge variant="destructive" className="h-5 min-w-[20px] text-xs">
+                                {message.groupData.unreadCount}
+                              </Badge>
+                            )}
+                            {!message.read && !isGroupThread && (
+                              <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
+                            )}
                           </div>
                         </div>
-                        {!message.read && (
-                          <Circle className="h-2 w-2 fill-blue-500 text-blue-500" />
+                        
+                        {/* Group thread preview */}
+                        {isGroupThread ? (
+                          <div>
+                            {message.groupData.description && (
+                              <p className="text-sm text-gray-600 mb-1">{message.groupData.description}</p>
+                            )}
+                            {message.groupData.lastMessage && (
+                              <p className="text-sm text-gray-700 line-clamp-2 mb-2">
+                                <span className="font-medium">{message.groupData.lastMessage.senderName}:</span>{' '}
+                                {message.groupData.lastMessage.content}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Users className="h-4 w-4 text-gray-400" />
+                                <span className="text-xs text-gray-600">{message.groupData.memberCount} members</span>
+                              </div>
+                              {/* Member avatars preview */}
+                              {message.groupData.members.length > 0 && (
+                                <div className="flex -space-x-1">
+                                  {message.groupData.members.slice(0, 3).map((member: any, index: number) => (
+                                    <Avatar key={member.userId} className="h-5 w-5 border border-white">
+                                      <AvatarFallback className="text-xs">
+                                        {member.firstName?.[0] || member.email?.[0] || '?'}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  ))}
+                                  {message.groupData.memberCount > 3 && (
+                                    <div className="h-5 w-5 bg-gray-200 rounded-full border border-white flex items-center justify-center">
+                                      <span className="text-xs text-gray-600">+{message.groupData.memberCount - 3}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-sm text-gray-700 line-clamp-2 mb-2">
+                              {message.editedContent || message.content}
+                            </p>
+                            
+                            {message.contextType && message.contextType !== 'group' && (
+                              <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getContextColor(message.contextType)}`}>
+                                {getContextIcon(message.contextType)}
+                                <span>{message.contextTitle || message.contextType}</span>
+                              </div>
+                            )}
+                          </div>
                         )}
-                      </div>
-                      
-                      <p className="text-sm text-gray-700 line-clamp-2 mb-2">
-                        {message.editedContent || message.content}
-                      </p>
-                      
-                      {message.contextType && (
-                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs ${getContextColor(message.contextType)}`}>
-                          {getContextIcon(message.contextType)}
-                          <span>{message.contextTitle || message.contextType}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           </ScrollArea>
@@ -528,11 +516,7 @@ export default function InboxPage() {
 
       {/* Message Detail */}
       <div className="flex-1 flex flex-col">
-        {selectedTab === 'groups' ? (
-          <div className="p-4">
-            <GroupThreadsList />
-          </div>
-        ) : showComposer ? (
+        {showComposer ? (
           <div className="p-4">
             <MessageComposer
               contextType="direct"
