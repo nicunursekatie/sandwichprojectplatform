@@ -162,7 +162,7 @@ const markAllRead = async (req: Request, res: Response) => {
 import { Express } from "express";
 import { broadcastToUser } from '../index';
 import { isAuthenticated } from '../replitAuth';
-import { getDatabase } from '../db';
+import { db } from '../db';
 export function registerMessageNotificationRoutes(app: Express) {
   // WebSocket upgrade handling is done in the main server file
 
@@ -180,7 +180,6 @@ export function registerMessageNotificationRoutes(app: Express) {
       }
 
       // Get unread message counts from database
-      const db = getDatabase();
       const unreadCounts = await db.execute(`
         SELECT 
           COUNT(*) as total_unread,
