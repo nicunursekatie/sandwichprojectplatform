@@ -36,10 +36,10 @@ export function MessageComposer({
 
   // Fetch all users for direct messaging
   const { data: users = [], isLoading: isLoadingUsers } = useQuery({
-    queryKey: ['/api/auth/users'],
+    queryKey: ['/api/users'],
     queryFn: async () => {
       try {
-        const response = await apiRequest('GET', '/api/auth/users');
+        const response = await apiRequest('GET', '/api/users');
         return Array.isArray(response) ? response : [];
       } catch (error) {
         console.error('Error fetching users:', error);
