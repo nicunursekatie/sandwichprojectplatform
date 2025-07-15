@@ -128,9 +128,9 @@ export default function InboxPage() {
                 memberCount: participants.length,
                 unreadCount,
                 lastMessage: lastMessage ? {
-                  content: lastMessage.content,
-                  senderName: lastMessage.sender || 'Unknown',
-                  createdAt: lastMessage.createdAt
+                  content: lastMessage.content || '',
+                  senderName: lastMessage.senderName || lastMessage.sender || 'Unknown',
+                  createdAt: lastMessage.createdAt || new Date().toISOString()
                 } : undefined,
                 members: participants.slice(0, 5) // Show first 5 members for preview
               };
@@ -439,7 +439,7 @@ export default function InboxPage() {
                                 {message?.senderName || 'Unknown'}
                               </p>
                               <p className="text-xs text-gray-500">
-                                {isGroupThread && message?.groupData?.lastMessage ? 
+                                {isGroupThread && message?.groupData?.lastMessage?.createdAt ? 
                                   formatDistanceToNow(new Date(message.groupData.lastMessage.createdAt), { addSuffix: true }) :
                                   message?.createdAt ? formatDistanceToNow(new Date(message.createdAt), { addSuffix: true }) : 'Unknown time'
                                 }
@@ -466,7 +466,7 @@ export default function InboxPage() {
                             )}
                             {message.groupData.lastMessage && (
                               <p className="text-sm text-gray-700 line-clamp-2 mb-2">
-                                <span className="font-medium">{message.groupData.lastMessage.senderName || 'Unknown'}:</span>{' '}
+                                <span className="font-medium">{message.groupData.lastMessage.senderName || message.groupData.lastMessage.sender || 'Unknown'}:</span>{' '}
                                 {message.groupData.lastMessage.content}
                               </p>
                             )}
