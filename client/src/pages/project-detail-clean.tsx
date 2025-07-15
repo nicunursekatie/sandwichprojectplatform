@@ -1246,9 +1246,9 @@ export default function ProjectDetailClean({ projectId, onBack }: ProjectDetailC
               <MessageComposer
                 contextType="project"
                 contextId={String(projectId)}
-                contextTitle={project.title}
-                defaultRecipients={project.assigneeName ? [{
-                  id: project.assigneeId || '',
+                contextTitle={project?.title || 'Project'}
+                defaultRecipients={(project?.assigneeName && project?.assigneeId) ? [{
+                  id: project.assigneeId,
                   name: project.assigneeName
                 }] : []}
                 onSent={() => {
