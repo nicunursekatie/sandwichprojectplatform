@@ -40,8 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { MessageComposer } from "@/components/message-composer";
 import { GroupConversation } from "@/components/group-conversation";
-import { isAuthenticated } from "../../../server/replitAuth";
-import { getDatabase } from "../../../server/db";
+import { queryClient } from "@/lib/queryClient";
 
 interface GroupThread {
   id: number;
@@ -285,12 +284,13 @@ export default function InboxPage() {
 
   // Filter messages based on search
   const filteredMessages = displayMessages.filter((message: any) => {
+    if (!message) return false; // Skip undefined/null messages
     if (!searchQuery) return true;
     const searchLower = searchQuery.toLowerCase();
     return (
-      message.content.toLowerCase().includes(searchLower) ||
-      message.senderName?.toLowerCase().includes(searchLower) ||
-      message.contextTitle?.toLowerCase().includes(searchLower)
+      (message.content || '').toLowerCase().includes(searchLower) ||
+      (message.senderName || '').toLowerCase().includes(searchLower) ||
+      (message.contextTitle || '').toLowerCase().includes(searchLower)
     );
   });
 
@@ -413,6 +413,7 @@ export default function InboxPage() {
                 </div>
               ) : (
                 filteredMessages.map((message: any) => {
+                  if (!message) return null; // Skip undefined messages
                   const isGroupThread = message.groupData;
 
                   return (
@@ -458,12 +459,12 @@ export default function InboxPage() {
                         </div>
 
                         {/* Group thread preview */}
-                        {isGroupThread ? (
+                        {isGroupThread && message?.groupData ? (
                           <div>
-                            {message?.groupData?.description && (
+                            {message.groupData.description && (
                               <p className="text-sm text-gray-600 mb-1">{message.groupData.description}</p>
                             )}
-                            {message?.groupData?.lastMessage && (
+                            {message.groupData.lastMessage && (
                               <p className="text-sm text-gray-700 line-clamp-2 mb-2">
                                 <span className="font-medium">{message.groupData.lastMessage.senderName || 'Unknown'}:</span>{' '}
                                 {message.groupData.lastMessage.content}
@@ -472,10 +473,10 @@ export default function InboxPage() {
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Users className="h-4 w-4 text-gray-400" />
-                                <span className="text-xs text-gray-600">{message?.groupData?.memberCount || 0} members</span>
+                                <span className="text-xs text-gray-600">{message.groupData.memberCount || 0} members</span>
                               </div>
                               {/* Member avatars preview */}
-                              {message?.groupData?.members?.length > 0 && (
+                              {message.groupData.members?.length > 0 && (
                                 <div className="flex -space-x-1">
                                   {message.groupData.members.slice(0, 3).map((member: any, index: number) => (
                                     <Avatar key={member?.userId || index} className="h-5 w-5 border border-white">
@@ -484,9 +485,9 @@ export default function InboxPage() {
                                       </AvatarFallback>
                                     </Avatar>
                                   ))}
-                                  {(message?.groupData?.memberCount || 0) > 3 && (
+                                  {(message.groupData.memberCount || 0) > 3 && (
                                     <div className="h-5 w-5 bg-gray-200 rounded-full border border-white flex items-center justify-center">
-                                      <span className="text-xs text-gray-600">+{(message?.groupData?.memberCount || 0) - 3}</span>
+                                      <span className="text-xs text-gray-600">+{(message.groupData.memberCount || 0) - 3}</span>
                                     </div>
                                   )}
                                 </div>
