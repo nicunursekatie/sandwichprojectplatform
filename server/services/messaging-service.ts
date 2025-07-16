@@ -8,7 +8,6 @@ import {
   users,
   conversations,
   conversationParticipants,
-  messageReads,
   type Message,
   type MessageRecipient,
   type MessageThread,
@@ -678,73 +677,7 @@ export class MessagingService {
     }
   }
 
-  /**
-   * Get unread messages for a user
-   */
-  async getUnreadMessages(userId: string, options: {
-    contextType?: string;
-    limit?: number;
-    offset?: number;
-  } = {}): Promise<Message[]> {
-    const { contextType, limit = 50, offset = 0 } = options;
 
-    try {
-      let query = db
-        .select({
-          id: messages.id,
-          senderId: messages.senderId,
-          content: messages.content,
-          contextType: messages.contextType,
-          contextId: messages.contextId,
-          contextTitle: messages.contextTitle,
-          createdAt: messages.createdAt,
-          editedAt: messages.editedAt,
-          editedContent: messages.editedContent,
-          senderName: users.displayName,
-          senderEmail: users.email,
-        })
-        .from(messages)
-        .innerJoin(messageRecipients, eq(messages.id, messageRecipients.messageId))
-        .leftJoin(users, eq(messages.senderId, users.id))
-        .leftJoin(
-          messageReads,
-          and(
-            eq(messageReads.messageId, messages.id),
-            eq(messageReads.userId, userId)
-          )
-        )
-        .where(
-          and(
-            eq(messageRecipients.recipientId, userId),
-            isNull(messageReads.readAt)
-          )
-        );
-
-      if (contextType) {
-        query = query.where(eq(messages.contextType, contextType));
-      }
-
-      const result = await query
-        .orderBy(desc(messages.createdAt))
-        .limit(limit)
-        .offset(offset);
-
-      // Filter out incomplete messages and add fallback senderName
-      const validMessages = result
-        .filter(msg => msg && msg.content && msg.senderId)
-        .map(msg => ({
-          ...msg,
-          senderName: msg.senderName || msg.senderEmail || `User ${msg.senderId}` || 'Unknown User',
-          read: false,
-        }));
-
-      console.log(`Returning ${validMessages.length} valid unread messages for user ${userId}`);
-      return validMessages;
-    } catch (error) {
-      console.error('Failed to get unread messages:', error);
-      throw error;
-    }
-  }
 
   /**
    * Get all messages for a user with optional context filtering
@@ -764,24 +697,17 @@ export class MessagingService {
           content: messages.content,
           contextType: messages.contextType,
           contextId: messages.contextId,
-          contextTitle: messages.contextTitle,
           createdAt: messages.createdAt,
           editedAt: messages.editedAt,
           editedContent: messages.editedContent,
           senderName: users.displayName,
           senderEmail: users.email,
-          read: messageReads.readAt,
+          read: messageRecipients.read,
+          readAt: messageRecipients.readAt,
         })
         .from(messages)
         .innerJoin(messageRecipients, eq(messages.id, messageRecipients.messageId))
         .leftJoin(users, eq(messages.senderId, users.id))
-        .leftJoin(
-          messageReads,
-          and(
-            eq(messageReads.messageId, messages.id),
-            eq(messageReads.userId, userId)
-          )
-        )
         .where(eq(messageRecipients.recipientId, userId));
 
       if (contextType) {
@@ -797,7 +723,7 @@ export class MessagingService {
         ...msg,
         senderName: msg.senderName || msg.senderEmail || `User ${msg.senderId}` || 'Unknown User',
         read: !!msg.read,
-        readAt: msg.read || undefined,
+        readAt: msg.readAt || undefined,
       }));
     } catch (error) {
       console.error('Failed to get all messages:', error);
@@ -805,44 +731,7 @@ export class MessagingService {
     }
   }
 
-  /**
-   * Get messages for a specific context
-   */
-  async getContextMessages(contextType: string, contextId: string): Promise<Message[]> {
-    try {
-      const result = await db
-        .select({
-          id: messages.id,
-          senderId: messages.senderId,
-          content: messages.content,
-          contextType: messages.contextType,
-          contextId: messages.contextId,
-          contextTitle: messages.contextTitle,
-          createdAt: messages.createdAt,
-          editedAt: messages.editedAt,
-          editedContent: messages.editedContent,
-          senderName: users.displayName,
-          senderEmail: users.email,
-        })
-        .from(messages)
-        .leftJoin(users, eq(messages.senderId, users.id))
-        .where(
-          and(
-            eq(messages.contextType, contextType),
-            eq(messages.contextId, contextId)
-          )
-        )
-        .orderBy(messages.createdAt);
 
-      return result.map(msg => ({
-        ...msg,
-        senderName: msg.senderName || msg.senderEmail || `User ${msg.senderId}` || 'Unknown User',
-      }));
-    } catch (error) {
-      console.error('Failed to get context messages:', error);
-      throw error;
-    }
-  }
 }
 
 // Export singleton instance
