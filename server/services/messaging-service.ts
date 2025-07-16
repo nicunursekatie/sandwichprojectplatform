@@ -8,6 +8,7 @@ import {
   users,
   conversations,
   conversationParticipants,
+  messageReads,
   type Message,
   type MessageRecipient,
   type MessageThread,
@@ -58,8 +59,7 @@ export class MessagingService {
       return await db.transaction(async (tx) => {
         // Get sender details
         const sender = await tx.select({
-          firstName: users.firstName,
-          lastName: users.lastName,
+          displayName: users.displayName,
           email: users.email,
         })
         .from(users)
@@ -67,7 +67,7 @@ export class MessagingService {
         .limit(1);
 
         const senderName = sender[0] 
-          ? `${sender[0].firstName || ''} ${sender[0].lastName || ''}`.trim() || 'Unknown User'
+          ? sender[0].displayName || sender[0].email || 'Unknown User'
           : 'Unknown User';
 
         // Create the message
@@ -128,7 +128,7 @@ export class MessagingService {
       const query = db
         .select({
           message: messages,
-          senderName: sql<string>`COALESCE(${users.firstName}, ${messages.sender}, 'Unknown User')`,
+          senderName: sql<string>`COALESCE(${users.displayName}, ${messages.sender}, 'Unknown User')`,
           senderEmail: users.email,
         })
         .from(messageRecipients)
@@ -254,7 +254,7 @@ export class MessagingService {
       const results = await db
         .select({
           message: messages,
-          senderName: sql<string>`COALESCE(${users.firstName}, ${messages.sender}, 'Unknown User')`,
+          senderName: sql<string>`COALESCE(${users.displayName}, ${messages.sender}, 'Unknown User')`,
           senderEmail: users.email,
         })
         .from(messages)

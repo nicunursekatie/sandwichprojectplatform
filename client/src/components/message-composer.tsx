@@ -51,20 +51,30 @@ export function MessageComposer({
 
   const handleSend = async () => {
     if (!content.trim()) {
-      toast({
-        description: "Please enter a message",
-        variant: "destructive",
+      toast({ 
+        title: "Message content required", 
+        description: "Please enter a message", 
+        variant: "destructive" 
       });
       return;
     }
 
     if (selectedRecipients.length === 0) {
-      toast({
-        description: "Please select at least one recipient",
-        variant: "destructive",
+      toast({ 
+        title: "Recipients required", 
+        description: "Please select at least one recipient", 
+        variant: "destructive" 
       });
       return;
     }
+
+    console.log('Sending message:', {
+      recipientIds: selectedRecipients.map(r => r.id),
+      content: content.trim(),
+      contextType,
+      contextId,
+      recipientCount: selectedRecipients.length
+    });
 
     try {
       await sendMessage({
@@ -84,9 +94,10 @@ export function MessageComposer({
       queryClient.invalidateQueries(['/api/messages']); // Refresh messages
     } catch (error) {
       console.error("Failed to send message:", error);
-      toast({
-        description: "Failed to send message",
-        variant: "destructive",
+      toast({ 
+        title: "Failed to send message", 
+        description: error instanceof Error ? error.message : "Please try again", 
+        variant: "destructive" 
       });
     }
   };
