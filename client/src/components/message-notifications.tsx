@@ -64,8 +64,9 @@ function MessageNotifications({ user }: MessageNotificationsProps) {
     // Robust WebSocket URL construction for different environments
     let wsUrl: string;
     
-    if (window.location.hostname.includes('.replit.dev') || window.location.hostname.includes('.replit.app')) {
+    if (window.location.hostname.includes('.replit.dev') || window.location.hostname.includes('.replit.app') || window.location.hostname.includes('.spock.replit.dev')) {
       // Replit environment - use the full hostname without port but with correct protocol
+      // Handle both old and new Replit domains
       wsUrl = `${protocol}//${window.location.hostname}/notifications`;
     } else if (window.location.hostname === 'localhost') {
       // Local development - use the actual port from location, fallback to 5000

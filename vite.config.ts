@@ -32,8 +32,10 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5000,
     hmr: {
-      port: 5000,
-      host: "localhost"
+      // In Replit, use the external hostname for HMR WebSocket connections
+      host: process.env.REPLIT_DEV_DOMAIN || "localhost",
+      port: 443, // Replit uses HTTPS/WSS on port 443
+      protocol: process.env.REPLIT_DEV_DOMAIN ? "wss" : "ws"
     },
     fs: {
       strict: true,
