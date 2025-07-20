@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { storage } from "../storage-wrapper";
 import { AuditLogger } from "../audit-logger";
+import { logger } from "../utils/logger";
 import fs from "fs/promises";
 import path from "path";
 
@@ -34,7 +35,7 @@ export class BackupManager {
     try {
       await fs.mkdir(this.backupsPath, { recursive: true });
     } catch (error) {
-      console.error('Failed to initialize backup directory:', error);
+      logger.error('Failed to initialize backup directory:', error);
     }
   }
 
@@ -123,13 +124,13 @@ export class BackupManager {
       return manifest;
 
     } catch (error) {
-      console.error('Backup creation failed:', error);
+      logger.error('Backup creation failed:', error);
       
       // Clean up partial backup
       try {
         await fs.rm(backupDir, { recursive: true, force: true });
       } catch (cleanupError) {
-        console.error('Failed to clean up partial backup:', cleanupError);
+        logger.error('Failed to clean up partial backup:', cleanupError);
       }
       
       throw error;
@@ -148,14 +149,14 @@ export class BackupManager {
             const manifestData = await fs.readFile(manifestPath, 'utf8');
             manifests.push(JSON.parse(manifestData));
           } catch (error) {
-            console.warn(`Failed to read manifest for backup ${dir}:`, error);
+            logger.warn(`Failed to read manifest for backup ${dir}:`, error);
           }
         }
       }
 
       return manifests.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     } catch (error) {
-      console.error('Failed to list backups:', error);
+      logger.error('Failed to list backups:', error);
       return [];
     }
   }
@@ -228,7 +229,7 @@ export class BackupManager {
     } catch (error) {
       return {
         valid: false,
-        errors: [`Backup validation failed: ${error.message}`]
+        errors: [`Backup validation failed: ${error?.message || String(error)}`]
       };
     }
   }
@@ -248,7 +249,7 @@ export class BackupManager {
 
       return true;
     } catch (error) {
-      console.error('Failed to delete backup:', error);
+      logger.error('Failed to delete backup:', error);
       return false;
     }
   }
@@ -274,7 +275,7 @@ export class BackupManager {
 
       return stats;
     } catch (error) {
-      console.error('Failed to get storage stats:', error);
+      logger.error('Failed to get storage stats:', error);
       return {
         totalBackups: 0,
         totalSize: 0,
@@ -301,13 +302,13 @@ export class BackupManager {
         // Schedule next backup
         this.scheduleAutoBackup();
       } catch (error) {
-        console.error('Scheduled backup failed:', error);
+        logger.error('Scheduled backup failed:', error);
         // Retry in 1 hour
         setTimeout(() => this.scheduleAutoBackup(), 60 * 60 * 1000);
       }
     }, timeUntilBackup);
 
-    console.log(`Next automated backup scheduled for: ${nextBackup.toISOString()}`);
+    logger.info(`Next automated backup scheduled for: ${nextBackup.toISOString()}`);
   }
 
   private static async cleanupOldBackups(): Promise<void> {
@@ -320,7 +321,7 @@ export class BackupManager {
         }
       }
     } catch (error) {
-      console.error('Failed to cleanup old backups:', error);
+      logger.error('Failed to cleanup old backups:', error);
     }
   }
 
@@ -330,7 +331,7 @@ export class BackupManager {
       const data = await fs.readFile(filePath);
       return crypto.createHash('sha256').update(data).digest('hex');
     } catch (error) {
-      console.error('Failed to calculate checksum:', error);
+      logger.error('Failed to calculate checksum:', error);
       return '';
     }
   }
