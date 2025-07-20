@@ -61,20 +61,22 @@ function MessageNotifications({ user }: MessageNotificationsProps) {
     // Set up WebSocket connection for real-time notifications
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     
-    // Simple WebSocket URL construction for Replit environment
+    // Robust WebSocket URL construction for different environments
     let wsUrl: string;
     
     if (window.location.hostname.includes('.replit.dev') || window.location.hostname.includes('.replit.app')) {
       // Replit environment - use the full hostname without port but with correct protocol
       wsUrl = `${protocol}//${window.location.hostname}/notifications`;
     } else if (window.location.hostname === 'localhost') {
-      // Local development - use the actual port from location
+      // Local development - use the actual port from location, fallback to 5000
       const port = window.location.port || '5000';
       wsUrl = `${protocol}//${window.location.hostname}:${port}/notifications`;
     } else {
       // Fallback for other environments
       wsUrl = `${protocol}//${window.location.host}/notifications`;
     }
+
+    console.debug('Attempting WebSocket connection to:', wsUrl);
 
     try {
       socket = new WebSocket(wsUrl);
@@ -95,8 +97,9 @@ function MessageNotifications({ user }: MessageNotificationsProps) {
       };
 
       socket.onclose = (event) => {
-        // Only attempt reconnection if not a normal closure
-        if (event.code !== 1000) {
+        console.debug('WebSocket closed:', event.code, event.reason);
+        // Only attempt reconnection if not a normal closure and not a connection failure
+        if (event.code !== 1000 && event.code !== 1006) {
           reconnectTimeoutId = setTimeout(() => {
             // The cleanup function will trigger re-initialization
           }, 5000);
