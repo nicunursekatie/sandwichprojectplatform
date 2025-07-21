@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../storage-wrapper";
 import { requirePermission, isAuthenticated, optionalAuth } from "../middleware/auth";
-import { insertProjectSchema } from "@shared/schema";
+import { insertProjectSchema, insertProjectTaskSchema, insertTaskCompletionSchema } from "@shared/schema";
 import { logger } from "../utils/logger";
 
 const router = Router();
@@ -13,7 +13,7 @@ router.get("/", optionalAuth, async (req: any, res) => {
     const projects = await storage.getAllProjects();
     res.json(projects);
   } catch (error) {
-    logger.error("Error fetching projects:", error);
+    logger.error("Error fetching projects:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to fetch projects" });
   }
 });
@@ -28,7 +28,7 @@ router.get("/:id", optionalAuth, async (req: any, res) => {
     }
     res.json(project);
   } catch (error) {
-    logger.error("Error fetching project:", error);
+    logger.error("Error fetching project:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to fetch project" });
   }
 });
@@ -43,26 +43,26 @@ router.post("/", requirePermission("edit_data"), async (req: any, res) => {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: "Invalid project data", details: error?.errors || "Unknown" });
     }
-    logger.error("Error creating project:", error);
+    logger.error("Error creating project:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to create project" });
   }
 });
 
 // Update project
-router.put("/:id", requirePermission("edit_data"), async (req: any, res) => {
+router.patch("/:id", requirePermission("edit_data"), async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    const validatedData = insertProjectSchema.partial().parse(req.body);
-    const project = await storage.updateProject(projectId, validatedData);
-    if (!project) {
+    
+    // Validate the project exists
+    const existingProject = await storage.getProjectById(projectId);
+    if (!existingProject) {
       return res.status(404).json({ error: "Project not found" });
     }
-    res.json(project);
+
+    const updatedProject = await storage.updateProject(projectId, req.body);
+    res.json(updatedProject);
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: "Invalid project data", details: error?.errors || "Unknown" });
-    }
-    logger.error("Error updating project:", error);
+    logger.error("Error updating project:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to update project" });
   }
 });
@@ -71,13 +71,10 @@ router.put("/:id", requirePermission("edit_data"), async (req: any, res) => {
 router.delete("/:id", requirePermission("edit_data"), async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    const success = await storage.deleteProject(projectId);
-    if (!success) {
-      return res.status(404).json({ error: "Project not found" });
-    }
-    res.status(204).send();
+    await storage.deleteProject(projectId);
+    res.json({ success: true, message: "Project deleted successfully" });
   } catch (error) {
-    logger.error("Error deleting project:", error);
+    logger.error("Error deleting project:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to delete project" });
   }
 });
@@ -89,52 +86,130 @@ router.get("/:id/tasks", optionalAuth, async (req: any, res) => {
     const tasks = await storage.getProjectTasks(projectId);
     res.json(tasks);
   } catch (error) {
-    logger.error("Error fetching project tasks:", error);
+    logger.error("Error fetching project tasks:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to fetch project tasks" });
   }
 });
 
-// Create task for project
+// Create project task
 router.post("/:id/tasks", requirePermission("edit_data"), async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    const taskData = { ...req.body, projectId };
-    const task = await storage.createTask(taskData);
+    const validatedData = insertProjectTaskSchema.parse({
+      ...req.body,
+      projectId
+    });
+    const task = await storage.createProjectTask(validatedData);
     res.status(201).json(task);
   } catch (error) {
-    logger.error("Error creating task:", error);
-    res.status(500).json({ error: "Failed to create task" });
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid task data", details: error?.errors || "Unknown" });
+    }
+    logger.error("Error creating project task:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to create project task" });
   }
 });
 
-// Update task completion
-router.post("/:projectId/tasks/:taskId/complete", requirePermission("edit_data"), async (req: any, res) => {
+// Update project task
+router.patch("/tasks/:taskId", requirePermission("edit_data"), async (req: any, res) => {
   try {
     const taskId = parseInt(req.params.taskId);
-    const { notes } = req.body;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
-
-    const completion = await storage.completeTask(taskId, userId, notes);
-    res.status(201).json(completion);
+    const updatedTask = await storage.updateProjectTask(taskId, req.body);
+    res.json(updatedTask);
   } catch (error) {
-    logger.error("Error completing task:", error);
-    res.status(500).json({ error: "Failed to complete task" });
+    logger.error("Error updating project task:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to update project task" });
+  }
+});
+
+// Delete project task
+router.delete("/tasks/:taskId", requirePermission("edit_data"), async (req: any, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    await storage.deleteProjectTask(taskId);
+    res.json({ success: true, message: "Task deleted successfully" });
+  } catch (error) {
+    logger.error("Error deleting project task:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to delete project task" });
+  }
+});
+
+// Mark task as complete/incomplete
+router.post("/tasks/:taskId/completion", requirePermission("edit_data"), async (req: any, res) => {
+  try {
+    const taskId = parseInt(req.params.taskId);
+    const { userId, completed } = req.body;
+    
+    if (completed) {
+      const validatedData = insertTaskCompletionSchema.parse({
+        taskId,
+        userId,
+        completedAt: new Date().toISOString()
+      });
+      const completion = await storage.createTaskCompletion(validatedData);
+      res.status(201).json(completion);
+    } else {
+      await storage.deleteTaskCompletion(taskId, userId);
+      res.json({ success: true, message: "Task completion removed" });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid completion data", details: error?.errors || "Unknown" });
+    }
+    logger.error("Error managing task completion:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to manage task completion" });
   }
 });
 
 // Get task completions
-router.get("/:projectId/tasks/:taskId/completions", optionalAuth, async (req: any, res) => {
+router.get("/tasks/:taskId/completions", optionalAuth, async (req: any, res) => {
   try {
     const taskId = parseInt(req.params.taskId);
     const completions = await storage.getTaskCompletions(taskId);
     res.json(completions);
   } catch (error) {
-    logger.error("Error fetching task completions:", error);
+    logger.error("Error fetching task completions:", error?.message || error || "Unknown error");
     res.status(500).json({ error: "Failed to fetch task completions" });
+  }
+});
+
+// Assign user to project
+router.post("/:id/assign-user", requirePermission("edit_data"), async (req: any, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const { userId, role } = req.body;
+    
+    const assignment = await storage.assignUserToProject(projectId, userId, role);
+    res.status(201).json(assignment);
+  } catch (error) {
+    logger.error("Error assigning user to project:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to assign user to project" });
+  }
+});
+
+// Remove user from project
+router.delete("/:id/remove-user", requirePermission("edit_data"), async (req: any, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const { userId } = req.body;
+    
+    await storage.removeUserFromProject(projectId, userId);
+    res.json({ success: true, message: "User removed from project successfully" });
+  } catch (error) {
+    logger.error("Error removing user from project:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to remove user from project" });
+  }
+});
+
+// Get project assignments
+router.get("/:id/assignments", optionalAuth, async (req: any, res) => {
+  try {
+    const projectId = parseInt(req.params.id);
+    const assignments = await storage.getProjectAssignments(projectId);
+    res.json(assignments);
+  } catch (error) {
+    logger.error("Error fetching project assignments:", error?.message || error || "Unknown error");
+    res.status(500).json({ error: "Failed to fetch project assignments" });
   }
 });
 
