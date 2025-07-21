@@ -52,8 +52,7 @@ router.post("/", requirePermission("edit_data"), async (req: any, res) => {
 router.patch("/:id", requirePermission("edit_data"), async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    
-    // Validate the project exists
+
     const existingProject = await storage.getProjectById(projectId);
     if (!existingProject) {
       return res.status(404).json({ error: "Project not found" });
@@ -139,7 +138,7 @@ router.post("/tasks/:taskId/completion", requirePermission("edit_data"), async (
   try {
     const taskId = parseInt(req.params.taskId);
     const { userId, completed } = req.body;
-    
+
     if (completed) {
       const validatedData = insertTaskCompletionSchema.parse({
         taskId,
@@ -178,7 +177,7 @@ router.post("/:id/assign-user", requirePermission("edit_data"), async (req: any,
   try {
     const projectId = parseInt(req.params.id);
     const { userId, role } = req.body;
-    
+
     const assignment = await storage.assignUserToProject(projectId, userId, role);
     res.status(201).json(assignment);
   } catch (error) {
@@ -192,7 +191,7 @@ router.delete("/:id/remove-user", requirePermission("edit_data"), async (req: an
   try {
     const projectId = parseInt(req.params.id);
     const { userId } = req.body;
-    
+
     await storage.removeUserFromProject(projectId, userId);
     res.json({ success: true, message: "User removed from project successfully" });
   } catch (error) {
