@@ -1,14 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
 import { storage } from "../storage-wrapper";
-import { requirePermission, isAuthenticated } from "../middleware/auth";
+import { requirePermission, isAuthenticated, optionalAuth } from "../middleware/auth";
 import { insertProjectSchema, insertProjectTaskSchema, insertTaskCompletionSchema } from "@shared/schema";
 import { logger } from "../utils/logger";
 
 const router = Router();
 
 // Get all projects
-router.get("/", isAuthenticated, async (req: any, res) => {
+router.get("/", optionalAuth, async (req: any, res) => {
   try {
     const projects = await storage.getAllProjects();
     res.json(projects);
@@ -19,7 +19,7 @@ router.get("/", isAuthenticated, async (req: any, res) => {
 });
 
 // Get single project
-router.get("/:id", isAuthenticated, async (req: any, res) => {
+router.get("/:id", optionalAuth, async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
     const project = await storage.getProjectById(projectId);
@@ -52,8 +52,7 @@ router.post("/", requirePermission("edit_data"), async (req: any, res) => {
 router.patch("/:id", requirePermission("edit_data"), async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
-    
-    // Validate the project exists
+
     const existingProject = await storage.getProjectById(projectId);
     if (!existingProject) {
       return res.status(404).json({ error: "Project not found" });
@@ -80,7 +79,7 @@ router.delete("/:id", requirePermission("edit_data"), async (req: any, res) => {
 });
 
 // Get project tasks
-router.get("/:id/tasks", isAuthenticated, async (req: any, res) => {
+router.get("/:id/tasks", optionalAuth, async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
     const tasks = await storage.getProjectTasks(projectId);
@@ -139,7 +138,7 @@ router.post("/tasks/:taskId/completion", requirePermission("edit_data"), async (
   try {
     const taskId = parseInt(req.params.taskId);
     const { userId, completed } = req.body;
-    
+
     if (completed) {
       const validatedData = insertTaskCompletionSchema.parse({
         taskId,
@@ -162,7 +161,7 @@ router.post("/tasks/:taskId/completion", requirePermission("edit_data"), async (
 });
 
 // Get task completions
-router.get("/tasks/:taskId/completions", isAuthenticated, async (req: any, res) => {
+router.get("/tasks/:taskId/completions", optionalAuth, async (req: any, res) => {
   try {
     const taskId = parseInt(req.params.taskId);
     const completions = await storage.getTaskCompletions(taskId);
@@ -178,7 +177,7 @@ router.post("/:id/assign-user", requirePermission("edit_data"), async (req: any,
   try {
     const projectId = parseInt(req.params.id);
     const { userId, role } = req.body;
-    
+
     const assignment = await storage.assignUserToProject(projectId, userId, role);
     res.status(201).json(assignment);
   } catch (error) {
@@ -192,7 +191,7 @@ router.delete("/:id/remove-user", requirePermission("edit_data"), async (req: an
   try {
     const projectId = parseInt(req.params.id);
     const { userId } = req.body;
-    
+
     await storage.removeUserFromProject(projectId, userId);
     res.json({ success: true, message: "User removed from project successfully" });
   } catch (error) {
@@ -202,7 +201,7 @@ router.delete("/:id/remove-user", requirePermission("edit_data"), async (req: an
 });
 
 // Get project assignments
-router.get("/:id/assignments", isAuthenticated, async (req: any, res) => {
+router.get("/:id/assignments", optionalAuth, async (req: any, res) => {
   try {
     const projectId = parseInt(req.params.id);
     const assignments = await storage.getProjectAssignments(projectId);

@@ -162,20 +162,23 @@ export function useMessaging() {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    // Fix WebSocket URL construction for different environments
+    // Robust WebSocket URL construction for different environments
     let wsUrl: string;
     
-    if (window.location.hostname.includes('.replit.dev') || window.location.hostname.includes('.replit.app')) {
+    if (window.location.hostname.includes('.replit.dev') || window.location.hostname.includes('.replit.app') || window.location.hostname.includes('.spock.replit.dev')) {
       // Replit environment - use the full hostname without port
+      // Handle both old and new Replit domains
       wsUrl = `${protocol}//${window.location.hostname}/notifications`;
     } else if (window.location.hostname === 'localhost') {
-      // Local development - use the actual port from location
+      // Local development - use the actual port from location, fallback to 5000
       const port = window.location.port || '5000';
       wsUrl = `${protocol}//${window.location.hostname}:${port}/notifications`;
     } else {
       // Fallback for other environments
       wsUrl = `${protocol}//${window.location.host}/notifications`;
     }
+
+    console.debug('Messaging WebSocket connecting to:', wsUrl);
     
     const ws = new WebSocket(wsUrl);
 
@@ -210,11 +213,11 @@ export function useMessaging() {
     };
 
     ws.onerror = (error) => {
-      console.error('Messaging WebSocket error:', error);
+      console.debug('Messaging WebSocket error:', error);
     };
 
-    ws.onclose = () => {
-      console.log('Messaging WebSocket disconnected');
+    ws.onclose = (event) => {
+      console.debug('Messaging WebSocket disconnected:', event.code, event.reason);
       setWsConnection(null);
     };
 
