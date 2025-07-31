@@ -11,7 +11,7 @@ import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
 import { HelpBubble } from "@/components/help-system/HelpBubble";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import SandwichCollectionForm from "@/components/sandwich-collection-form";
-import tspLogo from "@/attached_assets/LOGOS/TSP_transparent.png";
+import tspLogo from "@assets/LOGOS/TSP_transparent.png";
 
 interface DashboardOverviewProps {
   onSectionChange: (section: string) => void;
@@ -119,7 +119,7 @@ export default function DashboardOverview({ onSectionChange }: { onSectionChange
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-lg border border-slate-200">
-                  <img src={sandwichLogo} alt="Sandwich" className="h-8 w-8 object-contain" />
+                  <img src={tspLogo} alt="Sandwich" className="h-8 w-8 object-contain" />
                 </div>
                 <div>
                   <h2 className="text-xl md:text-2xl font-black text-slate-900 font-roboto tracking-tight">Record Collection Data</h2>

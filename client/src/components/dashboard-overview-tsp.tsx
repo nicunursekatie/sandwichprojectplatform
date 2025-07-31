@@ -10,7 +10,7 @@ import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
 import { HelpBubble } from "@/components/help-system/HelpBubble";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import SandwichCollectionForm from "@/components/sandwich-collection-form-tsp";
-import tspLogo from "@/attached_assets/LOGOS/TSP_transparent.png";
+import tspLogo from "@assets/LOGOS/TSP_transparent.png";
 
 interface DashboardOverviewProps {
   onSectionChange: (section: string) => void;
