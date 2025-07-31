@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileText, TrendingUp, Calendar, Award, Download, ExternalLink, Sandwich, Eye } from "lucide-react";
+import { FileText, TrendingUp, Calendar, Award, Download, ExternalLink, Sandwich, Eye, Heart, Users, Target, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
+import { TSPCard, TSPCardHeader, TSPCardTitle, TSPCardContent, TSPStatCard } from "@/components/ui/tsp-card";
+import { TSPButton } from "@/components/ui/tsp-button";
+import { Heading, Text } from "@/components/ui/tsp-typography";
+import { TSPBadge } from "@/components/ui/tsp-badge";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
 import { HelpBubble } from "@/components/help-system/HelpBubble";
 import { DocumentPreviewModal } from "@/components/document-preview-modal";
 import SandwichCollectionForm from "@/components/sandwich-collection-form";
-import tspLogo from "@assets/sandwich_project_transparent_1753668698851.png";
-import sandwichLogo from "@assets/LOGOS/sandwich logo.png";
+import tspLogo from "@/attached_assets/LOGOS/TSP_transparent.png";
 
 interface DashboardOverviewProps {
   onSectionChange: (section: string) => void;
