@@ -56,22 +56,33 @@ export const verifySupabaseToken = async (req: Request, res: Response, next: Nex
 export const optionalSupabaseAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
+    console.log('OptionalSupabaseAuth - Authorization header:', authHeader ? 'Present' : 'Missing');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       // No token provided, continue without user
+      console.log('OptionalSupabaseAuth - No Bearer token found');
       return next();
     }
 
     const token = authHeader.substring(7);
-    const { data: { user } } = await supabase.auth.getUser(token);
+    console.log('OptionalSupabaseAuth - Verifying token...');
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error) {
+      console.log('OptionalSupabaseAuth - Token verification error:', error.message);
+    }
 
     // Attach user if token is valid, otherwise continue without
     if (user) {
+      console.log('OptionalSupabaseAuth - User authenticated:', user.email);
       req.user = user;
+    } else {
+      console.log('OptionalSupabaseAuth - No user found for token');
     }
     
     next();
   } catch (error) {
+    console.error('OptionalSupabaseAuth - Unexpected error:', error);
     // Continue without user on error
     next();
   }
