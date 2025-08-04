@@ -1,37 +1,4 @@
 import 'dotenv/config';
-// CRITICAL: Prevent server exit in production before any other imports
-if (process.env.NODE_ENV === "production") {
-  console.log("🛡️ PRODUCTION MODE: Installing aggressive exit prevention...");
-  
-  // Override process.exit to prevent any exit calls
-  const originalExit = process.exit;
-  process.exit = ((code?: number) => {
-    console.log(`⚠️ BLOCKED process.exit(${code}) in production mode`);
-    console.log("Server MUST stay alive for deployment - exit blocked");
-    return undefined as never;
-  }) as typeof process.exit;
-  
-  // Keep process alive immediately
-  process.stdin.resume();
-  
-  // Prevent any unhandled errors from crashing the server
-  process.on('uncaughtException', (error) => {
-    console.error('🚨 Uncaught Exception (production - server continues):', error);
-  });
-  
-  process.on('unhandledRejection', (reason, promise) => {
-    console.error('🚨 Unhandled Rejection (production - server continues):', reason);
-  });
-  
-  process.on('beforeExit', (code) => {
-    console.log(`🛡️ beforeExit triggered with code ${code} - keeping server alive`);
-    setImmediate(() => {
-      console.log("✅ Server kept alive via setImmediate");
-    });
-  });
-  
-  console.log("✅ Production exit prevention installed");
-}
 
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
@@ -103,30 +70,6 @@ async function startServer() {
 
     console.log(`Starting server on ${host}:${port} in ${process.env.NODE_ENV || "development"} mode`);
 
-    // Retry port allocation for deployment robustness
-    const tryPort = async (basePort: number, maxRetries = 5): Promise<number> => {
-      for (let i = 0; i < maxRetries; i++) {
-        const testPort = basePort + i;
-        try {
-          const testServer = require('net').createServer();
-          await new Promise((resolve, reject) => {
-            testServer.once('error', reject);
-            testServer.once('listening', () => {
-              testServer.close(resolve);
-            });
-            testServer.listen(testPort, host);
-          });
-          return testPort;
-        } catch (err) {
-          if (i === maxRetries - 1) {
-            console.log(`⚠ All ports busy, using ${basePort} anyway`);
-            return basePort;
-          }
-          continue;
-        }
-      }
-      return basePort;
-    };
 
     // Set up basic routes BEFORE starting server
     app.use("/attached_assets", express.static("attached_assets"));
@@ -154,8 +97,7 @@ async function startServer() {
       console.log("✓ Static file serving and SPA routing configured for production");
     }
 
-    // Use smart port selection in production
-    const finalPort = process.env.NODE_ENV === "production" ? await tryPort(Number(port)) : port;
+    const finalPort = port;
 
     const httpServer = createServer(app);
 
@@ -248,11 +190,6 @@ async function startServer() {
       console.log(`✓ Environment: ${process.env.NODE_ENV || "development"}`);
       console.log("✓ Basic server ready - starting background initialization...");
 
-      // Signal deployment readiness to Replit
-      if (process.env.NODE_ENV === "production") {
-        console.log("🚀 PRODUCTION SERVER READY FOR TRAFFIC 🚀");
-        console.log("Server is fully operational and accepting connections");
-      }
 
       // Do heavy initialization in background after server is listening
       setImmediate(async () => {
@@ -303,43 +240,16 @@ async function startServer() {
             "✓ The Sandwich Project server is fully ready to handle requests",
           );
 
-          // In production, add aggressive keep-alive measures
-          if (process.env.NODE_ENV === "production") {
-            console.log("🚀 PRODUCTION SERVER INITIALIZATION COMPLETE 🚀");
-            
-            // Keep process alive with multiple strategies
-            process.stdin.resume();
-            process.on('beforeExit', (code) => {
-              console.log(`⚠ Process attempting to exit with code ${code} - preventing in production`);
-              setTimeout(() => {
-                console.log("✓ Production keep-alive timeout triggered");
-              }, 1000);
-            });
-            
-            // Production heartbeat
-            setInterval(() => {
-              console.log(`✓ PRODUCTION HEARTBEAT - Server active, uptime: ${Math.floor(process.uptime())}s`);
-            }, 60000);
-          }
         } catch (initError) {
           console.error("✗ Background initialization failed:", initError);
           console.log("Server continues to run with basic functionality...");
           
-          // Even if initialization fails, keep the server alive in production
-          if (process.env.NODE_ENV === "production") {
-            process.stdin.resume();
-            console.log("✓ Server kept alive despite initialization error");
-          }
         }
       });
     });
 
-    // Graceful shutdown - disabled in production to prevent exit
+    // Graceful shutdown
     const shutdown = async (signal: string) => {
-      if (process.env.NODE_ENV === "production") {
-        console.log(`⚠ Ignoring ${signal} in production mode - server will continue running`);
-        return;
-      }
       console.log(`Received ${signal}, starting graceful shutdown...`);
       httpServer.close(() => {
         console.log("HTTP server closed gracefully");
@@ -356,12 +266,7 @@ async function startServer() {
 
     process.on("uncaughtException", (error) => {
       console.error("Uncaught Exception:", error);
-      // Don't shutdown in production to keep deployment stable
-      if (process.env.NODE_ENV !== "production") {
-        shutdown("uncaughtException");
-      } else {
-        console.log("Production mode: continuing operation despite uncaught exception...");
-      }
+      shutdown("uncaughtException");
     });
 
     process.on("unhandledRejection", (reason, promise) => {
@@ -370,26 +275,6 @@ async function startServer() {
       console.log("Continuing server operation despite unhandled rejection...");
     });
 
-    // Keep the process alive in production with multiple strategies
-    if (process.env.NODE_ENV === "production") {
-      // Strategy 1: Regular heartbeat
-      setInterval(() => {
-        // Silent heartbeat to prevent process from being garbage collected
-      }, 5000);
-
-      // Strategy 2: Prevent process exit events
-      process.stdin.resume(); // Keep process alive
-
-      // Strategy 3: Override process.exit in production
-      const originalExit = process.exit;
-      process.exit = ((code?: number) => {
-        console.log(`⚠ Prevented process.exit(${code}) in production mode`);
-        console.log("Server will continue running...");
-        return undefined as never;
-      }) as typeof process.exit;
-
-      console.log("✓ Production process keep-alive strategies activated");
-    }
 
     return httpServer;
   } catch (error) {
@@ -406,67 +291,9 @@ startServer()
   .then((server) => {
     console.log("✓ Server startup sequence completed successfully");
     console.log("✓ Server object:", server ? "EXISTS" : "NULL");
-
-    setInterval(() => {
-      console.log(
-        `✓ KEEPALIVE - Server still listening: ${server?.listening || "UNKNOWN"}`,
-      );
-    }, 30000);
   })
   .catch((error) => {
     console.error("✗ Failed to start server:", error);
-    // Don't exit in production - try to start a minimal server instead
-    if (process.env.NODE_ENV === "production") {
-      console.log("Starting minimal fallback server for production...");
-      const express = require("express");
-      const fallbackApp = express();
-
-      fallbackApp.get("/", (req: any, res: any) => res.status(200).send(`
-        <!DOCTYPE html>
-        <html>
-          <head><title>The Sandwich Project</title></head>
-          <body>
-            <h1>The Sandwich Project - Fallback Mode</h1>
-            <p>Server is running in fallback mode</p>
-            <p>Timestamp: ${new Date().toISOString()}</p>
-          </body>
-        </html>
-      `));
-
-      fallbackApp.get("/health", (req: any, res: any) => res.status(200).json({ 
-        status: "fallback", 
-        timestamp: Date.now(),
-        mode: "production-fallback"
-      }));
-
-      const fallbackServer = fallbackApp.listen(5000, "0.0.0.0", () => {
-        console.log("✓ Minimal fallback server running on port 5000");
-
-        // Keep fallback server alive too
-        setInterval(() => {
-          console.log("✓ Fallback server heartbeat");
-        }, 30000);
-      });
-
-      // Prevent fallback server from exiting
-      process.stdin.resume();
-
-    } else {
-      process.exit(1);
-    }
+    process.exit(1);
   });
 
-// PRODUCTION INFINITE KEEP-ALIVE LOOP
-if (process.env.NODE_ENV === "production") {
-  console.log("🔄 Starting production infinite keep-alive loop...");
-  
-  const keepAlive = () => {
-    setTimeout(() => {
-      console.log(`🔄 Production keep-alive tick - uptime: ${Math.floor(process.uptime())}s`);
-      keepAlive(); // Recursive call to keep the loop going forever
-    }, 60000); // Every 60 seconds
-  };
-  
-  keepAlive();
-  console.log("✅ Production infinite keep-alive loop started");
-}
