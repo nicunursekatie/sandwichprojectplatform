@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, MessageCircle, Shield, Car, Heart, Globe, Hash } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNow } from "date-fns";
 import io, { Socket } from "socket.io-client";
 

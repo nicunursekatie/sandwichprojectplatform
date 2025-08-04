@@ -35,7 +35,7 @@ import { TaskAssigneeSelector } from "@/components/task-assignee-selector";
 import { ProjectAssigneeSelector } from "@/components/project-assignee-selector";
 import { MultiUserTaskCompletion } from "@/components/multi-user-task-completion";
 import SendKudosButton from "@/components/send-kudos-button";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { canEditProject, canDeleteProject } from "@shared/auth-utils";
 
 interface Project {

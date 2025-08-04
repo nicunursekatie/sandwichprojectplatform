@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useSocketChat, ChatMessage, ChatRoom } from "@/hooks/useSocketChat";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { ChatMessageLikeButton } from "./chat-message-like-button";
 import { 
   MessageSquare, 

@@ -2,7 +2,7 @@ import { Clock, Users, AlertCircle, CheckCircle, Calendar, Edit, Trash2 } from "
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import SendKudosButton from "@/components/send-kudos-button";
 import type { Project } from "@shared/schema";
 

@@ -13,7 +13,7 @@ import { insertMessageSchema, type Message } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 
 const messageFormSchema = z.object({
   content: z.string().min(1, "Message content is required"),

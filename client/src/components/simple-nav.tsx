@@ -21,7 +21,7 @@ import {
   Scale
 } from "lucide-react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
 import { useMessaging } from "@/hooks/useMessaging";
 import { useQuery } from "@tanstack/react-query";

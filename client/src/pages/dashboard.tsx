@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import sandwichLogo from "@assets/LOGOS/TSP_transparent.png";
 import squareSandwichLogo from "@assets/LOGOS/sandwich logo.png";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/lib/supabase";
 import ProjectList from "@/components/project-list";
 import WeeklySandwichForm from "@/components/weekly-sandwich-form";
 import EnhancedChat from "@/components/enhanced-chat";
@@ -31,7 +32,7 @@ import UserManagement from "@/components/user-management";
 import UserProfile from "@/components/user-profile";
 import { useState } from "react";
 import * as React from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
 import { queryClient } from "@/lib/queryClient";
 import SimpleNav from "@/components/simple-nav";
@@ -374,11 +375,9 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
           <button 
             onClick={async () => {
               try {
-                // Call logout API to clear session
-                await fetch('/api/logout', {
-                  method: 'POST',
-                  credentials: 'include'
-                });
+                // Sign out from Supabase
+                await supabase.auth.signOut();
+                
                 // Clear query cache
                 queryClient.clear();
                 // Redirect to landing page

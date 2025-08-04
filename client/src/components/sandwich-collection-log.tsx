@@ -12,7 +12,7 @@ import BulkDataManager from "@/components/bulk-data-manager";
 import SandwichCollectionForm from "@/components/sandwich-collection-form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission, PERMISSIONS, canEditCollection, canDeleteCollection } from "@shared/auth-utils";
 import type { SandwichCollection, Host } from "@shared/schema";
 import { HelpBubble, helpContent } from "@/components/help-system";

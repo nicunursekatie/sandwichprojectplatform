@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 // import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { useMessageReads } from "@/hooks/useMessageReads";
 import { MessageLikeButton } from "./message-like-button";
 import type { Host, Message } from "@shared/schema";

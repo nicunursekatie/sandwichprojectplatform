@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Loader2, Mail } from 'lucide-react';
 
-export const LoginForm: React.FC = () => {
+const LoginForm: React.FC = () => {
   const [, navigate] = useLocation();
   const { signIn, signUp, resetPassword } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -239,3 +239,5 @@ export const LoginForm: React.FC = () => {
     </div>
   );
 };
+
+export default LoginForm;

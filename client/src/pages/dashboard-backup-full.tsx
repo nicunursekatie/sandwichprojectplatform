@@ -29,7 +29,7 @@ import UserManagement from "@/components/user-management";
 import UserProfile from "@/components/user-profile";
 import { useState } from "react";
 import * as React from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
 import { queryClient } from "@/lib/queryClient";
 import SimpleNav from "@/components/simple-nav";

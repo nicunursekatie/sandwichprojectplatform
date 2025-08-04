@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { useMessageReads } from "@/hooks/useMessageReads";
 import { MessageLikeButton } from "./message-like-button";
 import { hasPermission, PERMISSIONS } from "@shared/auth-utils";

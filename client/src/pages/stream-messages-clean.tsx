@@ -13,7 +13,7 @@ import {
 } from 'stream-chat-react';
 import 'stream-chat-react/dist/css/v2/index.css';
 
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Type guard for user object
 function isValidUser(user: any): user is { id: number; firstName?: string; lastName?: string; email: string } {

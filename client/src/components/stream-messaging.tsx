@@ -31,7 +31,7 @@ import {
   Forward,
   Paperclip
 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
 
 // Import Stream Chat styles
