@@ -1,8 +1,9 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { queryClient } from "@/lib/queryClient";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { useAuth } from "@/hooks/useAuth";
 import { initGA } from "../lib/analytics";
 import { useAnalytics } from "../hooks/use-analytics";
@@ -17,9 +18,25 @@ import Dashboard from "@/pages/dashboard";
 import Landing from "@/pages/landing";
 import SignupPage from "@/pages/signup";
 import NotFound from "@/pages/not-found";
+import LoginForm from "@/components/auth/LoginForm";
+import ResetPassword from "@/components/auth/ResetPassword";
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingState text="Authenticating..." size="lg" className="min-h-screen" />;
+  }
+
+  if (!user) {
+    return <Redirect to="/login" />;
+  }
+
+  return <>{children}</>;
+}
 
 function Router() {
-  const { isAuthenticated, isLoading, error } = useAuth();
+  const { user, loading } = useAuth();
   
   // Track page views when routes change
   useAnalytics();
@@ -27,90 +44,106 @@ function Router() {
   // Enhanced tracking for detailed user behavior analytics
   useEnhancedTracking();
 
-  if (isLoading) {
-    return <LoadingState text="Authenticating..." size="lg" className="min-h-screen" />;
-  }
-
-  // Enhanced error handling for authentication issues
-  if (error && error.message && !error.message.includes('401')) {
-    console.error('[App] Authentication error:', error);
-    // For non-401 errors, show error state
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="max-w-md p-6 bg-white rounded-lg shadow-lg text-center">
-          <h2 className="text-xl font-semibold text-red-600 mb-2">Authentication Error</h2>
-          <p className="text-gray-600 mb-4">There was a problem verifying your account.</p>
-          <button 
-            onClick={() => window.location.href = "/api/login"}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // If not authenticated, show public routes with login option
-  if (!isAuthenticated) {
-    return (
-      <Switch>
-        <Route path="/signup" component={SignupPage} />
-        <Route path="/login">
-          {() => {
-            // Redirect to the backend login page
-            window.location.href = "/api/login";
-            return <LoadingState text="Redirecting to login..." size="lg" className="min-h-screen" />;
-          }}
-        </Route>
-        <Route path="/stream-messages">
-          {() => (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-              <div className="max-w-md p-6 bg-white rounded-lg shadow-lg text-center">
-                <h2 className="text-xl font-semibold text-blue-600 mb-2">Authentication Required</h2>
-                <p className="text-gray-600 mb-4">Please log in to access the messaging system.</p>
-                <button 
-                  onClick={() => window.location.href = "/api/login"}
-                  className="px-6 py-2 bg-[#236383] text-white rounded hover:bg-[#1a4d61] transition-colors"
-                >
-                  Login to Continue
-                </button>
-              </div>
-            </div>
-          )}
-        </Route>
-        <Route path="/">
-          {() => {
-            // Redirect unauthenticated users directly to login
-            window.location.href = "/api/login";
-            return <LoadingState text="Redirecting to login..." size="lg" className="min-h-screen" />;
-          }}
-        </Route>
-        <Route>
-          {() => {
-            // Default fallback - redirect to login
-            window.location.href = "/api/login";
-            return <LoadingState text="Redirecting to login..." size="lg" className="min-h-screen" />;
-          }}
-        </Route>
-      </Switch>
-    );
+  if (loading) {
+    return <LoadingState text="Loading..." size="lg" className="min-h-screen" />;
   }
 
   return (
     <Switch>
-      <Route path="/messages">{() => <Dashboard initialSection="messages" />}</Route>
-      <Route path="/stream-messages">{() => <Dashboard initialSection="stream-messages" />}</Route>
-      <Route path="/inbox">{() => <Dashboard initialSection="inbox" />}</Route>
-      <Route path="/suggestions">{() => <Dashboard initialSection="suggestions" />}</Route>
-      <Route path="/governance">{() => <Dashboard initialSection="governance" />}</Route>
-      <Route path="/google-sheets">{() => <Dashboard initialSection="google-sheets" />}</Route>
-      <Route path="/meetings">{() => <Dashboard initialSection="meetings" />}</Route>
-      <Route path="/projects">{() => <Dashboard initialSection="projects" />}</Route>
-      <Route path="/projects/:id">{(params) => <Dashboard initialSection={`project-${params.id}`} />}</Route>
-      <Route path="/dashboard">{() => <Dashboard />}</Route>
-      <Route path="/dashboard/:section">{(params) => <Dashboard initialSection={params.section} />}</Route>
-      <Route path="/">{() => <Dashboard />}</Route>
+      {/* Public Routes */}
+      <Route path="/login">
+        {() => user ? <Redirect to="/dashboard" /> : <LoginForm />}
+      </Route>
+      <Route path="/signup">
+        {() => user ? <Redirect to="/dashboard" /> : <SignupPage />}
+      </Route>
+      <Route path="/reset-password" component={ResetPassword} />
+      
+      {/* Protected Routes */}
+      <Route path="/messages">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="messages" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/stream-messages">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="stream-messages" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/inbox">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="inbox" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/suggestions">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="suggestions" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/governance">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="governance" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/google-sheets">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="google-sheets" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/meetings">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="meetings" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/projects">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard initialSection="projects" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/projects/:id">
+        {(params) => (
+          <ProtectedRoute>
+            <Dashboard initialSection={`project-${params.id}`} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard">
+        {() => (
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/dashboard/:section">
+        {(params) => (
+          <ProtectedRoute>
+            <Dashboard initialSection={params.section} />
+          </ProtectedRoute>
+        )}
+      </Route>
+      
+      {/* Root Route */}
+      <Route path="/">
+        {() => user ? <Redirect to="/dashboard" /> : <Redirect to="/login" />}
+      </Route>
+      
+      {/* 404 Route */}
       <Route component={NotFound} />
     </Switch>
   );
@@ -130,10 +163,12 @@ function App() {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
