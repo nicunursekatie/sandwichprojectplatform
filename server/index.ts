@@ -1,3 +1,4 @@
+import 'dotenv/config';
 // CRITICAL: Prevent server exit in production before any other imports
 if (process.env.NODE_ENV === "production") {
   console.log("🛡️ PRODUCTION MODE: Installing aggressive exit prevention...");

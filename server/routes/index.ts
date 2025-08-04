@@ -1,11 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import { isAuthenticated } from "../replitAuth";
 
 const router = Router();
 
 // Example route, needs to be replaced with actual routes
-router.get("/conversations", isAuthenticated, async (_req, res) => {
+router.get("/conversations", async (_req, res) => {
   try {
     // Placeholder logic, replace with actual data fetching
     const conversations: any[] = [];
@@ -16,7 +15,7 @@ router.get("/conversations", isAuthenticated, async (_req, res) => {
   }
 });
 
-router.post("/conversations", isAuthenticated, async (req, res) => {
+router.post("/conversations", async (req, res) => {
   try {
     const conversationSchema = z.object({
       participantIds: z.array(z.string()),
