@@ -3,8 +3,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { queryClient } from "@/lib/queryClient";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { useAuth } from "@/hooks/useAuth";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { initGA } from "../lib/analytics";
 import { useAnalytics } from "../hooks/use-analytics";
 import { useEnhancedTracking } from "../hooks/use-enhanced-tracking";

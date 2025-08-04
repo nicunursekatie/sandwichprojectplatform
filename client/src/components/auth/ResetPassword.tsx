@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'wouter';
+import { useLocation } from 'wouter';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -8,8 +8,8 @@ import { Alert, AlertDescription } from '../ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Loader2, CheckCircle } from 'lucide-react';
 
-export const ResetPassword: React.FC = () => {
-  const [, navigate] = useNavigate();
+const ResetPassword: React.FC = () => {
+  const [, navigate] = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -141,3 +141,5 @@ export const ResetPassword: React.FC = () => {
     </div>
   );
 };
+
+export default ResetPassword;
