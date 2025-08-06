@@ -1,15 +1,23 @@
 import { Router } from 'express';
 import { emailService } from '../services/email-service';
-import { isAuthenticated } from '../temp-auth';
+import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { storage } from '../storage-wrapper';
 
 const router = Router();
 
 // Get emails by folder with optional threading
-router.get('/', isAuthenticated, async (req: any, res) => {
+router.get('/', verifySupabaseToken, async (req: any, res) => {
   try {
-    const user = req.user;
-    if (!user?.id) {
+    // Get the Supabase user from the token
+    const supabaseUser = req.user;
+    if (!supabaseUser?.email) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found in database' });
     }
 
     const folder = (req.query.folder as string) || 'inbox';
@@ -50,11 +58,18 @@ router.get('/', isAuthenticated, async (req: any, res) => {
 });
 
 // Send new email
-router.post('/', isAuthenticated, async (req: any, res) => {
+router.post('/', verifySupabaseToken, async (req: any, res) => {
   try {
-    const user = req.user;
-    if (!user?.id) {
+    // Get the Supabase user from the token
+    const supabaseUser = req.user;
+    if (!supabaseUser?.email) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found in database' });
     }
 
     const { recipientId, recipientName, recipientEmail, subject, content, isDraft, contextType, contextId, contextTitle } = req.body;
@@ -93,11 +108,18 @@ router.post('/', isAuthenticated, async (req: any, res) => {
 });
 
 // Update email status (star, archive, trash, mark read)
-router.patch('/:id', isAuthenticated, async (req: any, res) => {
+router.patch('/:id', verifySupabaseToken, async (req: any, res) => {
   try {
-    const user = req.user;
-    if (!user?.id) {
+    // Get the Supabase user from the token
+    const supabaseUser = req.user;
+    if (!supabaseUser?.email) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found in database' });
     }
 
     const emailId = parseInt(req.params.id);
@@ -119,11 +141,18 @@ router.patch('/:id', isAuthenticated, async (req: any, res) => {
 });
 
 // Delete email
-router.delete('/:id', isAuthenticated, async (req: any, res) => {
+router.delete('/:id', verifySupabaseToken, async (req: any, res) => {
   try {
-    const user = req.user;
-    if (!user?.id) {
+    // Get the Supabase user from the token
+    const supabaseUser = req.user;
+    if (!supabaseUser?.email) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found in database' });
     }
 
     const emailId = parseInt(req.params.id);
@@ -143,11 +172,18 @@ router.delete('/:id', isAuthenticated, async (req: any, res) => {
 });
 
 // Get unread email count
-router.get('/unread-count', isAuthenticated, async (req: any, res) => {
+router.get('/unread-count', verifySupabaseToken, async (req: any, res) => {
   try {
-    const user = req.user;
-    if (!user?.id) {
+    // Get the Supabase user from the token
+    const supabaseUser = req.user;
+    if (!supabaseUser?.email) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found in database' });
     }
 
     const count = await emailService.getUnreadEmailCount(user.id);

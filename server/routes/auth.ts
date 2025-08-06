@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { verifySupabaseToken, optionalSupabaseAuth } from "../middleware/supabase-auth.js";
-import { getDefaultPermissionsForRole } from "../../shared/auth-utils.js";
+import { verifySupabaseToken, optionalSupabaseAuth } from "../middleware/supabase-auth.ts";
+import { getDefaultPermissionsForRole } from "../../shared/auth-utils.ts";
 import { createClient } from '@supabase/supabase-js';
 
 const router = Router();
@@ -170,7 +170,7 @@ router.put("/auth/permissions/:userId", verifySupabaseToken, async (req, res) =>
   }
   
   try {
-    const { setUserPermissions } = await import('../services/permissions.js');
+    const { setUserPermissions } = await import('../services/permissions.ts');
     const success = await setUserPermissions(userId, permissions, req.user.id);
     
     if (success) {

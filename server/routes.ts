@@ -6140,7 +6140,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   ): Promise<string[]> => {
     try {
       // Import chat permissions from shared utilities
-      const { CHAT_PERMISSIONS } = await import("../shared/auth-utils.js");
+      const { CHAT_PERMISSIONS } = await import("../shared/auth-utils.ts");
       const requiredPermission =
         CHAT_PERMISSIONS[chatName as keyof typeof CHAT_PERMISSIONS];
 

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { isAuthenticated } from '../temp-auth';
-import { IStorage } from '../storage.js';
+import { IStorage } from '../storage.ts';
 import { sql, eq, and, desc, asc, count } from 'drizzle-orm';
 
 export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
