@@ -24,6 +24,7 @@ import shoutoutRoutes from "./routes/shoutouts";
 import { createUserActivityRoutes } from "./routes/user-activity";
 import { createEnhancedUserActivityRoutes } from "./routes/enhanced-user-activity";
 import { authRoutes } from "./routes/auth";
+import { verifySupabaseToken, optionalSupabaseAuth } from "./middleware/supabase-auth";
 
 // import { generalRateLimit, strictRateLimit, uploadRateLimit, clearRateLimit } from "./middleware/rateLimiter";
 import { sanitizeMiddleware } from "./middleware/sanitizer";
@@ -83,28 +84,43 @@ import { db } from "./db";
 import { StreamChat } from "stream-chat";
 
 // Permission middleware to check user roles and permissions
+// This middleware should be used AFTER verifySupabaseToken or optionalSupabaseAuth
 const requirePermission = (permission: string) => {
   return async (req: any, res: any, next: any) => {
     try {
-      // Get user from session or req.user (temp auth sets req.user)
-      let user = req.user || req.session?.user;
-
-      if (!user) {
-        return res.status(401).json({ message: "Authentication required" });
-      }
-
-      // Always fetch fresh user data from database to ensure permissions are current
-      if (user.email) {
+      // First check if there's a Supabase user (from verifySupabaseToken middleware)
+      let user = req.user;
+      
+      // If we have a Supabase user, get the full user data from database
+      if (user && user.email) {
         try {
-          const freshUser = await storage.getUserByEmail(user.email);
-          if (freshUser) {
-            user = freshUser;
-            req.user = freshUser;
+          const dbUser = await storage.getUserByEmail(user.email);
+          if (dbUser) {
+            user = dbUser;
+          } else {
+            // User exists in Supabase but not in our database
+            return res.status(401).json({ message: "User not found in database" });
           }
         } catch (dbError) {
           console.error("Database error in requirePermission:", dbError);
-          // Continue with session user if database fails
+          return res.status(500).json({ message: "Database error during permission check" });
         }
+      } else if (req.session?.user) {
+        // Fallback to session user if available (for backwards compatibility)
+        user = req.session.user;
+        if (user.email) {
+          try {
+            const freshUser = await storage.getUserByEmail(user.email);
+            if (freshUser) {
+              user = freshUser;
+            }
+          } catch (dbError) {
+            console.error("Database error in requirePermission:", dbError);
+          }
+        }
+      } else {
+        // No user found
+        return res.status(401).json({ message: "Authentication required" });
       }
 
       // Check if user has the required permission
@@ -114,6 +130,8 @@ const requirePermission = (permission: string) => {
         return res.status(403).json({ message: "Insufficient permissions" });
       }
 
+      // Store the full user object for the route handler
+      req.user = user;
       next();
     } catch (error) {
       res.status(500).json({ message: "Permission check failed" });
@@ -1057,7 +1075,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sandwich Collections Stats - Complete totals including individual + group collections (Optimized)
-  app.get("/api/sandwich-collections/stats", async (req, res) => {
+  app.get("/api/sandwich-collections/stats", optionalSupabaseAuth, async (req, res) => {
     try {
       const stats = await QueryOptimizer.getCachedQuery(
         "sandwich-collections-stats",
@@ -1095,7 +1113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sandwich Collections
-  app.get("/api/sandwich-collections", async (req, res) => {
+  app.get("/api/sandwich-collections", optionalSupabaseAuth, async (req, res) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 50;
@@ -1124,6 +1142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post(
     "/api/sandwich-collections",
+    verifySupabaseToken,
     requirePermission("create_collections"),
     async (req, res) => {
       try {
@@ -1164,6 +1183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put(
     "/api/sandwich-collections/:id",
+    verifySupabaseToken,
     requirePermission("edit_all_collections"),
     async (req, res) => {
       try {
@@ -1187,6 +1207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Fix data corruption in sandwich collections - MUST be before /:id route
   app.patch("/api/sandwich-collections/fix-data-corruption", 
+    verifySupabaseToken,
     requirePermission("edit_all_collections"),
     async (req, res) => {
     try {
@@ -1259,6 +1280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch(
     "/api/sandwich-collections/:id",
+    verifySupabaseToken,
     requirePermission("edit_data"),
     async (req, res) => {
       try {
@@ -1284,7 +1306,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   );
 
-  app.delete("/api/sandwich-collections/bulk", async (req, res) => {
+  app.delete("/api/sandwich-collections/bulk", 
+    verifySupabaseToken,
+    requirePermission("delete_data"),
+    async (req, res) => {
     try {
       const collections = await storage.getAllSandwichCollections();
       const collectionsToDelete = collections.filter((collection) => {
@@ -1319,7 +1344,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Batch delete sandwich collections (must be before :id route)
-  app.delete("/api/sandwich-collections/batch-delete", async (req, res) => {
+  app.delete("/api/sandwich-collections/batch-delete", 
+    verifySupabaseToken,
+    requirePermission("delete_data"),
+    async (req, res) => {
     try {
       const { ids } = req.body;
 
@@ -1361,7 +1389,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Clean duplicates from sandwich collections (must be before :id route)
-  app.delete("/api/sandwich-collections/clean-duplicates", async (req, res) => {
+  app.delete("/api/sandwich-collections/clean-duplicates", 
+    verifySupabaseToken,
+    requirePermission("delete_data"),
+    async (req, res) => {
     try {
       const { mode = "exact" } = req.body; // 'exact', 'suspicious', or 'og-duplicates'
       const collections = await storage.getAllSandwichCollections();
@@ -1496,6 +1527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete(
     "/api/sandwich-collections/:id",
+    verifySupabaseToken,
     requirePermission("delete_all_collections"),
     async (req, res) => {
       try {
@@ -1521,7 +1553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   );
 
   // Analyze duplicates in sandwich collections
-  app.get("/api/sandwich-collections/analyze-duplicates", async (req, res) => {
+  app.get("/api/sandwich-collections/analyze-duplicates", optionalSupabaseAuth, async (req, res) => {
     try {
       const collections = await storage.getAllSandwichCollections();
 
@@ -1648,6 +1680,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Clean selected suspicious entries from sandwich collections
   app.delete("/api/sandwich-collections/clean-selected", 
+    verifySupabaseToken,
     requirePermission("delete_data"),
     async (req, res) => {
     try {
@@ -1681,6 +1714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Clean duplicates from sandwich collections
   app.delete("/api/sandwich-collections/clean-duplicates", 
+    verifySupabaseToken,
     requirePermission("delete_data"),
     async (req, res) => {
     try {
@@ -1783,6 +1817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Batch edit sandwich collections
   app.patch(
     "/api/sandwich-collections/batch-edit",
+    verifySupabaseToken,
     requirePermission("edit_data"),
     async (req, res) => {
       try {

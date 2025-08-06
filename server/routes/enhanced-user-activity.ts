@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { verifySupabaseToken, optionalSupabaseAuth } from '../middleware/supabase-auth';
 import { IStorage } from '../storage.ts';
 import { storage } from '../storage-wrapper';
 import { sql, eq, and, desc, asc, count } from 'drizzle-orm';
@@ -390,18 +390,15 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
   });
 
   // Real-time activity tracking (for live updates)
-  router.post('/track', verifySupabaseToken, async (req, res) => {
+  router.post('/track', optionalSupabaseAuth, async (req, res) => {
     try {
-      // Get the Supabase user from the token
+      // Get the Supabase user from the token if authenticated
       const supabaseUser = (req as any).user;
-      if (!supabaseUser?.email) {
-        return res.status(401).json({ error: 'User not authenticated' });
-      }
-
-      // Get the full user data from database
-      const user = await storage.getUserByEmail(supabaseUser.email);
-      if (!user) {
-        return res.status(401).json({ error: 'User not found in database' });
+      let user = null;
+      
+      // If authenticated, get the full user data from database
+      if (supabaseUser?.email) {
+        user = await storage.getUserByEmail(supabaseUser.email);
       }
 
       const {
@@ -414,7 +411,7 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
       } = req.body;
 
       const activityData = {
-        userId: user.id,
+        userId: user?.id || 'anonymous',
         action: action || 'View',
         section: section || 'Unknown',
         feature: feature || null,
@@ -426,7 +423,10 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
         metadata: metadata || {}
       };
 
-      await storage.logUserActivity(activityData);
+      // Only log if we have a valid user (for now, skip anonymous tracking)
+      if (user?.id) {
+        await storage.logUserActivity(activityData);
+      }
 
       res.json({ success: true, message: 'Activity tracked successfully' });
     } catch (error) {
