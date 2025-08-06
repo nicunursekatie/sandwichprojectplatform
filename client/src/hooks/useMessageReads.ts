@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useAuth } from "./useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Message {
   id: number;

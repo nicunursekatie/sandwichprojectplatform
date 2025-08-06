@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { io, Socket } from "socket.io-client";
-import { useAuth } from "./useAuth";
+import { useAuth } from '@/contexts/AuthContext';
 import { getUserPermissions } from "@shared/auth-utils";
 
 export interface ChatMessage {

@@ -94,7 +94,7 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const { user, isLoading } = useAuth();
+  const { user, loading: isLoading } = useAuth();
 
   // Make setActiveSection available globally for project detail navigation
   React.useEffect(() => {

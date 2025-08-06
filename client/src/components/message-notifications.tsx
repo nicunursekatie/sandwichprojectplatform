@@ -42,8 +42,8 @@ function MessageNotifications({ user }: MessageNotificationsProps) {
   // Query for unread message counts - only when authenticated
   const { data: unreadCounts, refetch, error, isLoading } = useQuery<UnreadCounts>({
     queryKey: ['/api/message-notifications/unread-counts'],
-    enabled: !!user && isAuthenticated,
-    refetchInterval: isAuthenticated ? 120000 : false, // Check every 2 minutes only when authenticated (reduced from 30 seconds)
+    enabled: !!user,
+    refetchInterval: 120000, // Check every 2 minutes
   });
 
 

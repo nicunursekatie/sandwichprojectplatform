@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAuth } from './useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 
 export function useWebSocket() {
   const { user } = useAuth();
