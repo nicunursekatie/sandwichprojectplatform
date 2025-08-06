@@ -302,7 +302,7 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
       <AnnouncementBanner />
       
       {/* Top Header */}
-      <div className="bg-gradient-to-r from-white to-orange-50/30 border-b-2 border-amber-200 shadow-sm px-2 sm:px-4 md:px-6 py-3 flex items-center relative z-50">
+      <div className="bg-gradient-to-r from-white to-orange-50/30 border-b-2 border-amber-200 shadow-sm px-2 sm:px-4 md:px-6 py-2 sm:py-3 flex items-center relative z-50 flex-wrap">
         <div className="flex items-center space-x-2 min-w-0 flex-shrink-0">
           {/* Mobile menu button - positioned first for easy access */}
           <button
@@ -320,7 +320,7 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
         {/* Flexible spacer */}
         <div className="flex-1" />
         
-        {/* Current User Indicator - moved to right side with right-aligned buttons */}
+        {/* Current User Indicator and buttons... unchanged ... */}
         <div className="flex items-center space-x-2 sm:space-x-3">
           {user && (
             <div className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1.5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200 shadow-sm">
@@ -411,7 +411,7 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
         </div>
       </div>
 
-      <div className="flex flex-1 relative">
+      <div className="flex flex-1 relative flex-col md:flex-row">
         {/* Mobile overlay */}
         {isMobileMenuOpen && (
           <div 
@@ -425,7 +425,7 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
           isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0 fixed md:relative z-50 ${
           isSidebarCollapsed ? 'w-16' : 'w-64 sm:w-72'
-        } bg-gradient-to-b from-white to-orange-50/30 border-r-2 border-amber-200 shadow-lg flex flex-col transition-all duration-300 ease-in-out h-full`}>
+        } bg-gradient-to-b from-white to-orange-50/30 border-r-2 border-amber-200 shadow-lg flex flex-col transition-all duration-300 ease-in-out h-full md:h-auto md:min-h-screen`}>
           {/* Collapse Toggle Button */}
           <div className="hidden md:flex justify-end p-2 border-b border-amber-200">
             <button
@@ -462,8 +462,8 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
         {/* Main Content */}
         <div className="flex-1 overflow-hidden w-full md:w-auto relative z-10 bg-gradient-to-br from-white to-orange-50/20">
           <div className="h-full overflow-y-auto overflow-x-hidden">
-            <div className={`${activeSection === 'gmail-inbox' ? 'p-2' : 'p-0 sm:p-4 md:p-6'} pb-20 min-h-full`}>
-              <div className="max-w-full overflow-x-hidden">
+            <div className={`${activeSection === 'gmail-inbox' ? 'p-2' : 'p-1 sm:p-4 md:p-6'} pb-20 min-h-full`}>
+              <div className="max-w-full overflow-x-auto">
                 {renderContent()}
               </div>
             </div>

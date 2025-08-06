@@ -2,6 +2,7 @@ import { Router } from "express";
 import { verifySupabaseToken, optionalSupabaseAuth } from "../middleware/supabase-auth.ts";
 import { getDefaultPermissionsForRole } from "../../shared/auth-utils.ts";
 import { createClient } from '@supabase/supabase-js';
+import { storage } from "../storage-wrapper";
 
 const router = Router();
 
@@ -11,43 +12,39 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Authentication routes
-router.get("/auth/user", optionalSupabaseAuth, async (req, res) => {
+router.get("/auth/user", verifySupabaseToken, async (req: any, res) => {
   if (!req.user) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
   try {
-    // Get role from user metadata
-    const role = req.user.user_metadata?.role || "viewer";
+    // Get the Supabase user
+    const supabaseUser = req.user;
     
-    // Fetch permissions from the user_permissions table
-    const { data: permissions, error } = await supabase
-      .from('user_permissions')
-      .select('permission')
-      .eq('user_id', req.user.id);
+    // Get the full user data from local database using email
+    const dbUser = await storage.getUserByEmail(supabaseUser.email);
     
-    let userPermissions: string[] = [];
+    if (!dbUser) {
+      // User exists in Supabase but not in local database
+      // This shouldn't happen in normal operation
+      console.error(`User ${supabaseUser.email} not found in local database`);
+      return res.status(404).json({ message: "User not found in database" });
+    }
     
-    if (error) {
-      console.error('Error fetching user permissions:', error);
-      // Fallback to role-based permissions if table query fails
-      userPermissions = getDefaultPermissionsForRole(role);
-    } else if (permissions && permissions.length > 0) {
-      // Use permissions from database
-      userPermissions = permissions.map(p => p.permission);
-    } else {
-      // No permissions in database, use role defaults
-      userPermissions = getDefaultPermissionsForRole(role);
+    if (!dbUser.isActive) {
+      return res.status(403).json({ message: "User account is inactive" });
     }
 
-    // Return the Supabase user data with permissions
+    // Return the full user data with permissions from local database
     res.json({
-      id: req.user.id,
-      email: req.user.email,
-      firstName: req.user.user_metadata?.firstName || "",
-      lastName: req.user.user_metadata?.lastName || "",
-      role: role,
-      permissions: userPermissions
+      id: dbUser.id,
+      email: dbUser.email,
+      firstName: dbUser.firstName || "",
+      lastName: dbUser.lastName || "",
+      displayName: dbUser.displayName || `${dbUser.firstName} ${dbUser.lastName}`.trim(),
+      profileImageUrl: dbUser.profileImageUrl,
+      role: dbUser.role,
+      permissions: dbUser.permissions || getDefaultPermissionsForRole(dbUser.role)
     });
   } catch (error) {
     console.error('Error in /auth/user endpoint:', error);
