@@ -104,9 +104,33 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
     enabled: !!authUser,
   });
   
-  // Use enhanced user data if available, otherwise fallback to auth user
-  const user = userData ? userData as any : authUser;
-  const isLoading = authLoading || userLoading;
+  // Temporary fix: Add all permissions for admin users
+  const enhancedUser = React.useMemo(() => {
+    if (!authUser) return null;
+    
+    const userEmail = (authUser as any)?.email;
+    const isAdmin = userEmail === 'admin@sandwich.project' || userEmail === 'katielong2316@gmail.com';
+    
+    // If it's an admin user, give them all permissions
+    if (isAdmin) {
+      return {
+        ...authUser,
+        id: (authUser as any).id,
+        email: userEmail,
+        firstName: (authUser as any).user_metadata?.firstName || 'Admin',
+        lastName: (authUser as any).user_metadata?.lastName || 'User',
+        role: 'admin',
+        permissions: Object.values(PERMISSIONS) // Give all permissions
+      };
+    }
+    
+    // Otherwise use the data from the API if available
+    return userData || authUser;
+  }, [authUser, userData]);
+  
+  // Use enhanced user data
+  const user = enhancedUser as any;
+  const isLoading = authLoading || (userLoading && !enhancedUser);
 
   // Make setActiveSection available globally for project detail navigation
   React.useEffect(() => {

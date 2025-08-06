@@ -23,6 +23,7 @@ import emailRoutes from "./routes/email-routes";
 import shoutoutRoutes from "./routes/shoutouts";
 import { createUserActivityRoutes } from "./routes/user-activity";
 import { createEnhancedUserActivityRoutes } from "./routes/enhanced-user-activity";
+import { authRoutes } from "./routes/auth";
 
 // import { generalRateLimit, strictRateLimit, uploadRateLimit, clearRateLimit } from "./middleware/rateLimiter";
 import { sanitizeMiddleware } from "./middleware/sanitizer";
@@ -411,52 +412,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Auth routes - Fixed to work with temp auth system
-  app.get("/api/auth/user", async (req: any, res) => {
-    try {
-      // Get user from session (temp auth) or req.user (Replit auth)
-      const user = req.session?.user || req.user;
+  // OLD Auth routes - Replaced by Supabase auth routes below
+  // app.get("/api/auth/user", async (req: any, res) => {
+  //   try {
+  //     // Get user from session (temp auth) or req.user (Replit auth)
+  //     const user = req.session?.user || req.user;
 
-      if (!user) {
-        return res.status(401).json({ message: "No user in session" });
-      }
+  //     if (!user) {
+  //       return res.status(401).json({ message: "No user in session" });
+  //     }
 
-      // For temp auth, user is directly in session, but get fresh data from database
-      if (req.session?.user) {
-        try {
-          const dbUser = await storage.getUserByEmail(req.session.user.email);
-          if (dbUser && dbUser.isActive) {
-            // Return fresh user data with updated permissions
-            res.json({
-              id: dbUser.id,
-              email: dbUser.email,
-              firstName: dbUser.firstName,
-              lastName: dbUser.lastName,
-              displayName: `${dbUser.firstName} ${dbUser.lastName}`,
-              profileImageUrl: dbUser.profileImageUrl,
-              role: dbUser.role,
-              permissions: dbUser.permissions,
-              isActive: dbUser.isActive
-            });
-            return;
-          }
-        } catch (error) {
-          console.error("Error getting fresh user data:", error);
-          // Fallback to session user if database error
-          res.json(user);
-          return;
-        }
-      }
+  //     // For temp auth, user is directly in session, but get fresh data from database
+  //     if (req.session?.user) {
+  //       try {
+  //         const dbUser = await storage.getUserByEmail(req.session.user.email);
+  //         if (dbUser && dbUser.isActive) {
+  //           // Return fresh user data with updated permissions
+  //           res.json({
+  //             id: dbUser.id,
+  //             email: dbUser.email,
+  //             firstName: dbUser.firstName,
+  //             lastName: dbUser.lastName,
+  //             displayName: `${dbUser.firstName} ${dbUser.lastName}`,
+  //             profileImageUrl: dbUser.profileImageUrl,
+  //             role: dbUser.role,
+  //             permissions: dbUser.permissions,
+  //             isActive: dbUser.isActive
+  //           });
+  //           return;
+  //         }
+  //       } catch (error) {
+  //         console.error("Error getting fresh user data:", error);
+  //         // Fallback to session user if database error
+  //         res.json(user);
+  //         return;
+  //       }
+  //     }
 
-      // For Replit auth, get user from database
-      const userId = req.user.claims?.sub || req.user.id;
-      const dbUser = await storage.getUser(userId);
-      res.json(dbUser || user);
-    } catch (error) {
-      console.error("Error fetching user:", error);
-      res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
+  //     // For Replit auth, get user from database
+  //     const userId = req.user.claims?.sub || req.user.id;
+  //     const dbUser = await storage.getUser(userId);
+  //     res.json(dbUser || user);
+  //   } catch (error) {
+  //     console.error("Error fetching user:", error);
+  //     res.status(500).json({ message: "Failed to fetch user" });
+  //   }
+  // });
+  
+  // Register Supabase auth routes
+  app.use("/api", authRoutes);
 
   // Import and use the new modular routes
   const routesModule = await import("./routes/index");

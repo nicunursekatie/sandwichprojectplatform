@@ -3,13 +3,18 @@ import { createClient } from '@supabase/supabase-js';
 
 // Initialize Supabase Admin client (for server-side verification)
 const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://mifquzfaqtcyboqntfyn.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseServiceKey) {
-  console.warn('Warning: SUPABASE_SERVICE_ROLE_KEY not set. Using anon key for auth verification.');
+  console.error('ERROR: SUPABASE_SERVICE_ROLE_KEY not set. Server-side auth verification will fail.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey || '');
+const supabase = createClient(supabaseUrl, supabaseServiceKey || '', {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 // Extend Express Request type to include user
 declare global {
@@ -57,6 +62,7 @@ export const optionalSupabaseAuth = async (req: Request, res: Response, next: Ne
   try {
     const authHeader = req.headers.authorization;
     console.log('OptionalSupabaseAuth - Authorization header:', authHeader ? 'Present' : 'Missing');
+    console.log('OptionalSupabaseAuth - Full header:', authHeader?.substring(0, 50) + '...');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       // No token provided, continue without user
@@ -65,16 +71,22 @@ export const optionalSupabaseAuth = async (req: Request, res: Response, next: Ne
     }
 
     const token = authHeader.substring(7);
+    console.log('OptionalSupabaseAuth - Token length:', token.length);
+    console.log('OptionalSupabaseAuth - Token preview:', token.substring(0, 20) + '...');
     console.log('OptionalSupabaseAuth - Verifying token...');
+    
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error) {
       console.log('OptionalSupabaseAuth - Token verification error:', error.message);
+      console.log('OptionalSupabaseAuth - Error code:', error.code);
+      console.log('OptionalSupabaseAuth - Error status:', error.status);
     }
 
     // Attach user if token is valid, otherwise continue without
     if (user) {
       console.log('OptionalSupabaseAuth - User authenticated:', user.email);
+      console.log('OptionalSupabaseAuth - User metadata:', user.user_metadata);
       req.user = user;
     } else {
       console.log('OptionalSupabaseAuth - No user found for token');
