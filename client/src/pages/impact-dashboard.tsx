@@ -210,16 +210,16 @@ export default function ImpactDashboard() {
   const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1'];
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-6 rounded-lg">
+    <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-2 sm:p-4 md:p-6 rounded-lg">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Impact Dashboard</h1>
-          <p className="text-lg text-gray-600">Visualizing our community impact through sandwich collections</p>
+        <div className="mb-4 sm:mb-6 md:mb-8">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">Impact Dashboard</h1>
+          <p className="text-base sm:text-lg text-gray-600">Visualizing our community impact through sandwich collections</p>
         </div>
 
         {/* Key Impact Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-lg font-medium flex items-center">
@@ -274,7 +274,7 @@ export default function ImpactDashboard() {
         </div>
 
         {/* Charts and Visualizations */}
-        <Tabs defaultValue="trends" className="space-y-6">
+        <Tabs defaultValue="trends" className="space-y-4 sm:space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="trends" className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
@@ -288,7 +288,7 @@ export default function ImpactDashboard() {
 
           {/* Trends Tab */}
           <TabsContent value="trends">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">
@@ -372,7 +372,7 @@ export default function ImpactDashboard() {
 
           {/* Impact Analysis Tab */}
           <TabsContent value="impact">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center">

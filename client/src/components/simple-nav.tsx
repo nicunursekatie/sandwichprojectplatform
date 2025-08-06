@@ -40,9 +40,26 @@ interface NavigationItem {
 }
 
 export default function SimpleNav({ onSectionChange, activeSection, isCollapsed = false }: { onSectionChange: (section: string) => void; activeSection?: string; isCollapsed?: boolean }) {
-  const { user } = useAuth();
+  const { user: supabaseUser } = useAuth();
   const [location] = useLocation();
   const { unreadCounts, totalUnread } = useMessaging();
+  
+  // Fetch full user data with permissions from the database
+  const { data: user } = useQuery({
+    queryKey: ['/api/auth/user', supabaseUser?.id],
+    queryFn: async () => {
+      if (!supabaseUser) return null;
+      try {
+        const response = await apiRequest('GET', '/api/auth/user');
+        return response;
+      } catch (error) {
+        console.error('Failed to fetch user data:', error);
+        return null;
+      }
+    },
+    enabled: !!supabaseUser,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
 
   // Get Gmail inbox unread count
   const { data: gmailUnreadCount = 0 } = useQuery({

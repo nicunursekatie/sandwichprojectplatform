@@ -12,6 +12,7 @@ import BulkDataManager from "@/components/bulk-data-manager";
 import SandwichCollectionForm from "@/components/sandwich-collection-form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission, PERMISSIONS, canEditCollection, canDeleteCollection } from "@shared/auth-utils";
 import type { SandwichCollection, Host } from "@shared/schema";
@@ -169,7 +170,18 @@ export default function SandwichCollectionLog() {
     queryFn: useCallback(async () => {
       if (needsAllData) {
         console.log('Fetching all data for filtering with filters:', debouncedSearchFilters);
-        const response = await fetch('/api/sandwich-collections?limit=10000');
+        
+        // Get auth headers
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        
+        const response = await fetch('/api/sandwich-collections?limit=10000', {
+          headers,
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error('Failed to fetch collections');
         const data = await response.json();
         
@@ -255,8 +267,18 @@ export default function SandwichCollectionLog() {
           }
         };
       } else {
+        // Get auth headers
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+        
         const sortParam = `&sort=${sortConfig.field}&order=${sortConfig.direction}`;
-        const response = await fetch(`/api/sandwich-collections?page=${currentPage}&limit=${itemsPerPage}${sortParam}`);
+        const response = await fetch(`/api/sandwich-collections?page=${currentPage}&limit=${itemsPerPage}${sortParam}`, {
+          headers,
+          credentials: 'include'
+        });
         if (!response.ok) throw new Error('Failed to fetch collections');
         return response.json();
       }
@@ -281,7 +303,17 @@ export default function SandwichCollectionLog() {
   const { data: totalStats } = useQuery({
     queryKey: ["/api/sandwich-collections/stats"],
     queryFn: async () => {
-      const response = await fetch('/api/sandwich-collections/stats');
+      // Get auth headers
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      const response = await fetch('/api/sandwich-collections/stats', {
+        headers,
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error('Failed to fetch stats');
       return response.json();
     }
@@ -692,9 +724,18 @@ export default function SandwichCollectionLog() {
   const batchEditMutation = useMutation({
     mutationFn: async (data: { ids: number[], updates: Partial<SandwichCollection> }) => {
       console.log("Batch edit request:", data);
+      
+      // Get auth headers
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
       const response = await fetch("/api/sandwich-collections/batch-edit", {
+        headers,
+        credentials: 'include',
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data)
       });
 
@@ -731,8 +772,18 @@ export default function SandwichCollectionLog() {
   // Export function
   const exportToCSV = async () => {
     try {
+      // Get auth headers
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
       // Fetch all collections data for export
-      const response = await fetch('/api/sandwich-collections?limit=10000');
+      const response = await fetch('/api/sandwich-collections?limit=10000', {
+        headers,
+        credentials: 'include'
+      });
       if (!response.ok) throw new Error('Failed to fetch all collections');
       const allCollectionsData = await response.json();
       const allCollections = allCollectionsData.collections || [];
@@ -815,9 +866,17 @@ export default function SandwichCollectionLog() {
 
   const batchDeleteMutation = useMutation({
     mutationFn: async (ids: number[]) => {
+      // Get auth headers
+      const { data: { session } } = await supabase.auth.getSession();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
       const response = await fetch("/api/sandwich-collections/batch-delete", {
+        headers,
+        credentials: 'include',
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids })
       });
       return response.json();

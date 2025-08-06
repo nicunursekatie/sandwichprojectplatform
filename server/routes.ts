@@ -125,9 +125,17 @@ const requirePermission = (permission: string) => {
 
       // Check if user has the required permission
       const hasPermission = checkUserPermission(user, permission);
+      
+      console.log(`[Permission Check] User: ${user.email}, Role: ${user.role}, Permission: ${permission}, Has Permission: ${hasPermission}`);
+      console.log(`[Permission Check] User permissions:`, user.permissions);
 
       if (!hasPermission) {
-        return res.status(403).json({ message: "Insufficient permissions" });
+        return res.status(403).json({ 
+          message: "Insufficient permissions",
+          required: permission,
+          userRole: user.role,
+          userPermissions: user.permissions || []
+        });
       }
 
       // Store the full user object for the route handler
