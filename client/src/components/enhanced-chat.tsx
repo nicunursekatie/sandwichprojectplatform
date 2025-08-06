@@ -93,7 +93,7 @@ export default function EnhancedChat() {
 
     // Initialize socket connection
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const socketUrl = `${protocol}//${window.location.host}`;
+    const socketUrl = `${window.location.protocol}//${window.location.host}`;
     const socketInstance = io(socketUrl, {
       transports: ["polling", "websocket"],
       upgrade: true,

@@ -36,7 +36,7 @@ export function useSocketChat() {
   useEffect(() => {
     if (!user) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const protocol = window.location.protocol; // "http:" or "https:"
     let socketUrl: string;
     
     if (window.location.hostname.includes('.replit.dev') || window.location.hostname.includes('.replit.app')) {

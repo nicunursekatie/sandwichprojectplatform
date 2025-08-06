@@ -1,5 +1,6 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import { supabase } from "./supabase";
+import { API_BASE_URL } from "../config/api";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -27,7 +28,10 @@ export async function apiRequest(
   const isFormData = body instanceof FormData;
   const authHeaders = await getAuthHeaders();
   
-  const res = await fetch(url, {
+  // Ensure URL is absolute
+  const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  
+  const res = await fetch(fullUrl, {
     method,
     headers: {
       ...authHeaders,
