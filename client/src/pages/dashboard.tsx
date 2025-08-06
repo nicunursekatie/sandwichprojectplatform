@@ -111,9 +111,16 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
     const userEmail = (authUser as any)?.email;
     const isAdmin = userEmail === 'admin@sandwich.project' || userEmail === 'katielong2316@gmail.com';
     
+    console.log('Dashboard Auth Debug:', {
+      userEmail,
+      isAdmin,
+      authUser: authUser,
+      userData: userData
+    });
+    
     // If it's an admin user, give them all permissions
     if (isAdmin) {
-      return {
+      const adminUser = {
         ...authUser,
         id: (authUser as any).id,
         email: userEmail,
@@ -122,6 +129,8 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
         role: 'admin',
         permissions: Object.values(PERMISSIONS) // Give all permissions
       };
+      console.log('Admin user with permissions:', adminUser);
+      return adminUser;
     }
     
     // Otherwise use the data from the API if available
