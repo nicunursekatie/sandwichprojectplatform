@@ -3,9 +3,25 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../db';
 import { googleSheets, insertGoogleSheetSchema } from '@shared/schema';
-import { isAuthenticated } from '../temp-auth';
+import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { storage } from '../storage-wrapper';
 
 const router = Router();
+
+// Helper function to get user data from Supabase user
+const getUserFromSupabase = async (req: any) => {
+  const supabaseUser = req.user;
+  if (!supabaseUser || !supabaseUser.email) {
+    throw new Error("User not authenticated");
+  }
+
+  const user = await storage.getUserByEmail(supabaseUser.email);
+  if (!user) {
+    throw new Error("User not found in database");
+  }
+
+  return user;
+};
 
 // Helper function to generate URLs from sheet ID
 function generateSheetUrls(sheetId: string) {
@@ -54,13 +70,13 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a new Google Sheet entry
-router.post('/', isAuthenticated, async (req, res) => {
+router.post('/', verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
     const validatedData = insertGoogleSheetSchema.parse(req.body);
     const { embedUrl, directUrl } = generateSheetUrls(validatedData.sheetId);
     
-    const user = (req as any).user;
-    const userId = user?.id || user?.claims?.sub;
+    const userId = user.id;
 
     const [newSheet] = await db
       .insert(googleSheets)
@@ -74,6 +90,9 @@ router.post('/', isAuthenticated, async (req, res) => {
 
     res.status(201).json(newSheet);
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ message: error.message });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ 
         message: 'Invalid input data',
@@ -87,7 +106,7 @@ router.post('/', isAuthenticated, async (req, res) => {
 });
 
 // Update a Google Sheet
-router.patch('/:id', isAuthenticated, async (req, res) => {
+router.patch('/:id', verifySupabaseToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -119,6 +138,9 @@ router.patch('/:id', isAuthenticated, async (req, res) => {
 
     res.json(updatedSheet);
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ message: error.message });
+    }
     if (error instanceof z.ZodError) {
       return res.status(400).json({ 
         message: 'Invalid input data',
@@ -132,7 +154,7 @@ router.patch('/:id', isAuthenticated, async (req, res) => {
 });
 
 // Delete a Google Sheet
-router.delete('/:id', isAuthenticated, async (req, res) => {
+router.delete('/:id', verifySupabaseToken, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     if (isNaN(id)) {
@@ -150,6 +172,9 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
 
     res.json({ message: 'Google Sheet deleted successfully' });
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ message: error.message });
+    }
     console.error('Error deleting Google Sheet:', error);
     res.status(500).json({ message: 'Failed to delete Google Sheet' });
   }
@@ -217,7 +242,7 @@ router.get('/sync/analyze', async (req, res) => {
 });
 
 // Import data from the target Google Sheet to database
-router.post('/sync/import', isAuthenticated, async (req, res) => {
+router.post('/sync/import', verifySupabaseToken, async (req, res) => {
   try {
     const { GoogleSheetsSyncService } = await import('../google-sheets-sync');
     const { StorageWrapper } = await import('../storage-wrapper');
@@ -261,7 +286,7 @@ router.post('/sync/import', isAuthenticated, async (req, res) => {
 });
 
 // Export database data to Google Sheet
-router.post('/sync/export', isAuthenticated, async (req, res) => {
+router.post('/sync/export', verifySupabaseToken, async (req, res) => {
   try {
     const { GoogleSheetsSyncService } = await import('../google-sheets-sync');
     const { StorageWrapper } = await import('../storage-wrapper');
@@ -287,7 +312,7 @@ router.post('/sync/export', isAuthenticated, async (req, res) => {
 });
 
 // Bidirectional sync between database and Google Sheet
-router.post('/sync/bidirectional', isAuthenticated, async (req, res) => {
+router.post('/sync/bidirectional', verifySupabaseToken, async (req, res) => {
   try {
     const { GoogleSheetsSyncService } = await import('../google-sheets-sync');
     const { StorageWrapper } = await import('../storage-wrapper');

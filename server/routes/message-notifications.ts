@@ -2,7 +2,8 @@ import { Request, Response, Express } from "express";
 import { eq, sql, and, gt, or, isNull } from "drizzle-orm";
 import { messages, messageRecipients, conversations, conversationParticipants, chatMessages, chatMessageReads } from "../../shared/schema";
 import { db } from "../db";
-import { isAuthenticated } from "../temp-auth";
+import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { storage } from '../storage-wrapper';
 
 // Helper function to check if user has permission for specific chat type
 function checkUserChatPermission(user: any, chatType: string): boolean {
@@ -36,21 +37,22 @@ function checkUserChatPermission(user: any, chatType: string): boolean {
 const getUnreadCounts = async (req: Request, res: Response) => {
     try {
       console.log('=== UNREAD COUNTS REQUEST ===');
-      console.log('req.user exists:', !!(req as any).user);
-      console.log('req.user?.id:', (req as any).user?.id);
-      console.log('req.session exists:', !!(req as any).session);
-      console.log('req.session?.user exists:', !!(req as any).session?.user);
+      const supabaseUser = (req as any).user;
       
-      // Try to get user from both req.user and req.session.user for compatibility
-      const userId = (req as any).user?.id || (req as any).session?.user?.id;
-      const user = (req as any).user || (req as any).session?.user;
-      
-      if (!userId || !user) {
-        console.log('Authentication failed: No user ID found');
+      if (!supabaseUser || !supabaseUser.email) {
+        console.log('Authentication failed: No Supabase user found');
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      console.log('Using user data:', { id: userId, permissions: user.permissions?.length || 0 });
+      // Get the full user data from database using Supabase user's email
+      const user = await storage.getUserByEmail(supabaseUser.email);
+      if (!user) {
+        console.log('Authentication failed: User not found in database');
+        return res.status(401).json({ message: "User not found in database" });
+      }
+
+      const userId = user.id;
+      console.log('Using user data:', { id: userId, email: user.email, permissions: user.permissions?.length || 0 });
 
       // Initialize counts
       let unreadCounts = {
@@ -164,10 +166,18 @@ const chatReadTracker = new Map<string, Date>();
 // Mark chat messages as read when user views a chat channel
 const markChatMessagesRead = async (req: Request, res: Response) => {
     try {
-      const userId = (req as any).user?.id || (req as any).session?.user?.id;
-      if (!userId) {
+      const supabaseUser = (req as any).user;
+      if (!supabaseUser || !supabaseUser.email) {
         return res.status(401).json({ error: "User not authenticated" });
       }
+
+      // Get the full user data from database
+      const user = await storage.getUserByEmail(supabaseUser.email);
+      if (!user) {
+        return res.status(401).json({ error: "User not found in database" });
+      }
+
+      const userId = user.id;
 
       const { channel, messageIds } = req.body;
 
@@ -231,10 +241,18 @@ const markChatMessagesRead = async (req: Request, res: Response) => {
 // Mark messages as read when user views a chat
 const markMessagesRead = async (req: Request, res: Response) => {
     try {
-      const userId = (req as any).user?.id || (req as any).session?.user?.id;
-      if (!userId) {
+      const supabaseUser = (req as any).user;
+      if (!supabaseUser || !supabaseUser.email) {
         return res.status(401).json({ error: "User not authenticated" });
       }
+
+      // Get the full user data from database
+      const user = await storage.getUserByEmail(supabaseUser.email);
+      if (!user) {
+        return res.status(401).json({ error: "User not found in database" });
+      }
+
+      const userId = user.id;
 
       const { conversationId } = req.body;
 
@@ -253,10 +271,18 @@ const markMessagesRead = async (req: Request, res: Response) => {
 // Mark all messages as read for user
 const markAllRead = async (req: Request, res: Response) => {
     try {
-      const userId = (req as any).user?.id || (req as any).session?.user?.id;
-      if (!userId) {
+      const supabaseUser = (req as any).user;
+      if (!supabaseUser || !supabaseUser.email) {
         return res.status(401).json({ error: "User not authenticated" });
       }
+
+      // Get the full user data from database
+      const user = await storage.getUserByEmail(supabaseUser.email);
+      if (!user) {
+        return res.status(401).json({ error: "User not found in database" });
+      }
+
+      const userId = user.id;
 
       // TODO: Implement when messageReads table is added
       res.json({ success: true, markedCount: 0 });
@@ -269,10 +295,10 @@ const markAllRead = async (req: Request, res: Response) => {
 // Register routes function
 export function registerMessageNotificationRoutes(app: Express) {
   // Use the proper unread counts function with the existing database schema
-  app.get('/api/message-notifications/unread-counts', isAuthenticated, getUnreadCounts);
-  app.post("/api/message-notifications/mark-read", isAuthenticated, markMessagesRead);
-  app.post("/api/message-notifications/mark-chat-read", isAuthenticated, markChatMessagesRead);
-  app.post("/api/message-notifications/mark-all-read", isAuthenticated, markAllRead);
+  app.get('/api/message-notifications/unread-counts', verifySupabaseToken, getUnreadCounts);
+  app.post("/api/message-notifications/mark-read", verifySupabaseToken, markMessagesRead);
+  app.post("/api/message-notifications/mark-chat-read", verifySupabaseToken, markChatMessagesRead);
+  app.post("/api/message-notifications/mark-all-read", verifySupabaseToken, markAllRead);
 }
 
 // Legacy export for backward compatibility

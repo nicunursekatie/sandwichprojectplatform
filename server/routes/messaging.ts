@@ -1,12 +1,28 @@
 import { Router } from "express";
 import { z } from "zod";
 import { messagingService } from "../services/messaging-service";
-import { isAuthenticated } from "../temp-auth";
+import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { storage } from '../storage-wrapper';
 
 const router = Router();
 
+// Helper function to get user data from Supabase user
+const getUserFromSupabase = async (req: any) => {
+  const supabaseUser = req.user;
+  if (!supabaseUser || !supabaseUser.email) {
+    throw new Error("User not authenticated");
+  }
+
+  const user = await storage.getUserByEmail(supabaseUser.email);
+  if (!user) {
+    throw new Error("User not found in database");
+  }
+
+  return user;
+};
+
 // All messaging routes require authentication
-router.use(isAuthenticated);
+router.use(verifySupabaseToken);
 
 // Send message schema
 const sendMessageSchema = z.object({
@@ -31,12 +47,7 @@ const sendKudosSchema = z.object({
  */
 router.post("/send", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      console.error("Send message: User not authenticated");
-      return res.status(401).json({ error: "User not authenticated" });
-    }
-
+    const user = await getUserFromSupabase(req);
     console.log("Send message request:", { userId: user.id, body: req.body });
 
     const result = sendMessageSchema.safeParse(req.body);
@@ -71,6 +82,9 @@ router.post("/send", async (req, res) => {
     });
   } catch (error) {
     console.error("Error sending message:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to send message", details: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
@@ -80,10 +94,7 @@ router.post("/send", async (req, res) => {
  */
 router.post("/kudos", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const result = sendKudosSchema.safeParse(req.body);
     if (!result.success) {
@@ -126,6 +137,9 @@ router.post("/kudos", async (req, res) => {
     });
   } catch (error) {
     console.error("Error sending kudos:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to send kudos" });
   }
 });
@@ -135,10 +149,7 @@ router.post("/kudos", async (req, res) => {
  */
 router.get("/kudos/check", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { recipientId, contextType, contextId } = req.query;
 
@@ -158,6 +169,9 @@ router.get("/kudos/check", async (req, res) => {
     res.json({ sent });
   } catch (error) {
     console.error("Error checking kudos status:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to check kudos status" });
   }
 });
@@ -167,16 +181,16 @@ router.get("/kudos/check", async (req, res) => {
  */
 router.get("/kudos/received", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const kudosMessages = await messagingService.getReceivedKudos(user.id);
 
     res.status(200).json(kudosMessages);
   } catch (error) {
     console.error("Error fetching received kudos:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to fetch kudos", details: error instanceof Error ? error.message : 'Unknown error' });
   }
 });
@@ -186,10 +200,7 @@ router.get("/kudos/received", async (req, res) => {
  */
 router.get("/unread", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType, limit = "50", offset = "0", groupByContext } = req.query;
 
@@ -216,6 +227,9 @@ router.get("/unread", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error getting unread messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to get unread messages" });
   }
 });
@@ -225,10 +239,7 @@ router.get("/unread", async (req, res) => {
  */
 router.get("/context/:contextType/:contextId", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType, contextId } = req.params;
     const { limit = "50", offset = "0" } = req.query;
@@ -264,6 +275,9 @@ router.get("/context/:contextType/:contextId", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error getting context messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to get messages" });
   }
 });
@@ -273,10 +287,7 @@ router.get("/context/:contextType/:contextId", async (req, res) => {
  */
 router.post("/:messageId/read", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const messageId = parseInt(req.params.messageId);
     if (isNaN(messageId)) {
@@ -287,6 +298,9 @@ router.post("/:messageId/read", async (req, res) => {
     res.json({ success });
   } catch (error) {
     console.error("Error marking message as read:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to mark message as read" });
   }
 });
@@ -296,10 +310,7 @@ router.post("/:messageId/read", async (req, res) => {
  */
 router.post("/mark-all-read", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType } = req.body;
 
@@ -311,6 +322,9 @@ router.post("/mark-all-read", async (req, res) => {
     res.json({ success: true, count });
   } catch (error) {
     console.error("Error marking all messages as read:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to mark messages as read" });
   }
 });
@@ -320,10 +334,7 @@ router.post("/mark-all-read", async (req, res) => {
  */
 router.put("/:messageId", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const messageId = parseInt(req.params.messageId);
     if (isNaN(messageId)) {
@@ -344,7 +355,9 @@ router.put("/:messageId", async (req, res) => {
     res.json({ success: true, message });
   } catch (error: any) {
     console.error("Error editing message:", error);
-    if (error.message?.includes("edit window") || error.message?.includes("sender")) {
+    if (error.message?.includes("not authenticated") || error.message?.includes("not found in database")) {
+      return res.status(401).json({ error: error.message });
+    } else if (error.message?.includes("edit window") || error.message?.includes("sender")) {
       res.status(403).json({ error: error.message });
     } else {
       res.status(500).json({ error: "Failed to edit message" });
@@ -357,10 +370,7 @@ router.put("/:messageId", async (req, res) => {
  */
 router.delete("/:messageId", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const messageId = parseInt(req.params.messageId);
     if (isNaN(messageId)) {
@@ -375,7 +385,9 @@ router.delete("/:messageId", async (req, res) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error("Error deleting message:", error);
-    if (error.message?.includes("sender")) {
+    if (error.message?.includes("not authenticated") || error.message?.includes("not found in database")) {
+      return res.status(401).json({ error: error.message });
+    } else if (error.message?.includes("sender")) {
       res.status(403).json({ error: error.message });
     } else {
       res.status(500).json({ error: "Failed to delete message" });
@@ -386,10 +398,7 @@ router.delete("/:messageId", async (req, res) => {
 // Get all messages for a user
 router.get("/messages", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType } = req.query;
 
@@ -422,6 +431,9 @@ router.get("/messages", async (req, res) => {
     res.json({ messages: validMessages });
   } catch (error) {
     console.error("Error fetching messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to fetch messages" });
   }
 });
@@ -431,10 +443,7 @@ router.get("/messages", async (req, res) => {
  */
 router.get("/all", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType, limit = "50", offset = "0" } = req.query;
 
@@ -447,6 +456,9 @@ router.get("/all", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error fetching all messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to fetch messages" });
   }
 });
@@ -456,10 +468,7 @@ router.get("/all", async (req, res) => {
  */
 router.get("/sent", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType, limit = "50", offset = "0" } = req.query;
 
@@ -472,6 +481,9 @@ router.get("/sent", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error fetching sent messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to fetch sent messages" });
   }
 });
@@ -481,10 +493,7 @@ router.get("/sent", async (req, res) => {
  */
 router.get("/inbox", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "Not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { contextType, limit = "50", offset = "0" } = req.query;
 
@@ -497,6 +506,9 @@ router.get("/inbox", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error fetching inbox messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to fetch inbox messages" });
   }
 });
@@ -506,10 +518,7 @@ router.get("/inbox", async (req, res) => {
  */
 router.get("/sent", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { limit = "50", offset = "0" } = req.query;
 
@@ -521,6 +530,9 @@ router.get("/sent", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error getting sent messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to get sent messages" });
   }
 });
@@ -530,10 +542,7 @@ router.get("/sent", async (req, res) => {
  */
 router.get("/drafts", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { limit = "50", offset = "0" } = req.query;
 
@@ -545,6 +554,9 @@ router.get("/drafts", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error getting draft messages:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to get draft messages" });
   }
 });
@@ -554,10 +566,7 @@ router.get("/drafts", async (req, res) => {
  */
 router.post("/drafts", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const { recipientIds, content, subject, contextType, contextId } = req.body;
 
@@ -577,6 +586,9 @@ router.post("/drafts", async (req, res) => {
     res.status(201).json({ success: true, draft });
   } catch (error) {
     console.error("Error saving draft:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to save draft" });
   }
 });
@@ -586,10 +598,7 @@ router.post("/drafts", async (req, res) => {
  */
 router.post("/:messageId/reply", async (req, res) => {
   try {
-    const user = (req as any).user;
-    if (!user) {
-      return res.status(401).json({ error: "User not authenticated" });
-    }
+    const user = await getUserFromSupabase(req);
 
     const messageId = parseInt(req.params.messageId);
     if (isNaN(messageId)) {
@@ -610,6 +619,9 @@ router.post("/:messageId/reply", async (req, res) => {
     res.status(201).json({ success: true, reply });
   } catch (error) {
     console.error("Error sending reply:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to send reply" });
   }
 });

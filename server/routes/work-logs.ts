@@ -3,17 +3,25 @@ import { z } from "zod";
 import { sql, eq } from "drizzle-orm";
 import { workLogs } from "@shared/schema";
 import { db } from "../db";
-// Import the actual authentication middleware being used in the app
-const isAuthenticated = (req: any, res: any, next: any) => {
-  const user = req.user || req.session?.user;
-  if (!user) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  req.user = user; // Ensure req.user is set
-  next();
-};
+import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { storage } from '../storage-wrapper';
 
 const router = Router();
+
+// Helper function to get user data from Supabase user
+const getUserFromSupabase = async (req: any) => {
+  const supabaseUser = req.user;
+  if (!supabaseUser || !supabaseUser.email) {
+    throw new Error("User not authenticated");
+  }
+
+  const user = await storage.getUserByEmail(supabaseUser.email);
+  if (!user) {
+    throw new Error("User not found in database");
+  }
+
+  return user;
+};
 
 // Zod schema for validation
 const insertWorkLogSchema = z.object({
@@ -26,28 +34,29 @@ const insertWorkLogSchema = z.object({
 });
 
 // Middleware to check if user is super admin or admin
-function isSuperAdmin(req) {
-  return req.user?.role === "super_admin" || req.user?.role === "admin";
+function isSuperAdmin(user: any) {
+  return user?.role === "super_admin" || user?.role === "admin";
 }
 
 // Middleware to check if user can log work
-function canLogWork(req) {
+function canLogWork(user: any) {
   // Allow admin, super_admin, or users with general permissions
-  return req.user?.role === "admin" || req.user?.role === "super_admin" || req.user?.role === "work_logger";
+  return user?.role === "admin" || user?.role === "super_admin" || user?.role === "work_logger";
 }
 
 // Get work logs - Admins see ALL, users see only their own
-router.get("/work-logs", isAuthenticated, async (req, res) => {
+router.get("/work-logs", verifySupabaseToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const userEmail = req.user.email;
-    const userRole = req.user.role;
+    const user = await getUserFromSupabase(req);
+    const userId = user.id;
+    const userEmail = user.email;
+    const userRole = user.role;
     
     console.log(`[WORK LOGS] User: ${userId}, Email: ${userEmail}, Role: ${userRole}`);
-    console.log(`[WORK LOGS] isSuperAdmin check: ${isSuperAdmin(req)}, isMarcy: ${userEmail === 'mdlouza@gmail.com'}`);
+    console.log(`[WORK LOGS] isSuperAdmin check: ${isSuperAdmin(user)}, isMarcy: ${userEmail === 'mdlouza@gmail.com'}`);
     
     // Super admin and Marcy can see ALL work logs
-    if (isSuperAdmin(req) || userEmail === 'mdlouza@gmail.com') {
+    if (isSuperAdmin(user) || userEmail === 'mdlouza@gmail.com') {
       console.log(`[WORK LOGS] Admin access - fetching ALL logs`);
       const logs = await db.select().from(workLogs);
       console.log(`[WORK LOGS] Found ${logs.length} total logs:`, logs.map(l => `${l.id}: ${l.userId}`));
@@ -61,18 +70,24 @@ router.get("/work-logs", isAuthenticated, async (req, res) => {
     }
   } catch (error) {
     console.error("Error fetching work logs:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to fetch work logs" });
   }
 });
 
 // Create a new work log
-router.post("/work-logs", isAuthenticated, async (req, res) => {
-  if (!canLogWork(req)) return res.status(403).json({ error: "Insufficient permissions" });
-  const result = insertWorkLogSchema.safeParse(req.body);
-  if (!result.success) return res.status(400).json({ error: result.error.message });
+router.post("/work-logs", verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
+    if (!canLogWork(user)) return res.status(403).json({ error: "Insufficient permissions" });
+    
+    const result = insertWorkLogSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.message });
+    
     const log = await db.insert(workLogs).values({
-      userId: req.user.id,
+      userId: user.id,
       description: result.data.description,
       hours: result.data.hours,
       minutes: result.data.minutes,
@@ -81,21 +96,26 @@ router.post("/work-logs", isAuthenticated, async (req, res) => {
     res.status(201).json(log[0]);
   } catch (error) {
     console.error("Error creating work log:", error);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to create work log" });
   }
 });
 
 // Update a work log (own or any if super admin)
-router.put("/work-logs/:id", isAuthenticated, async (req, res) => {
-  const logId = parseInt(req.params.id);
-  if (isNaN(logId)) return res.status(400).json({ error: "Invalid log ID" });
-  const result = insertWorkLogSchema.safeParse(req.body);
-  if (!result.success) return res.status(400).json({ error: result.error.message });
+router.put("/work-logs/:id", verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
+    const logId = parseInt(req.params.id);
+    if (isNaN(logId)) return res.status(400).json({ error: "Invalid log ID" });
+    const result = insertWorkLogSchema.safeParse(req.body);
+    if (!result.success) return res.status(400).json({ error: result.error.message });
+    
     // Only allow editing own log unless super admin or Marcy
     const log = await db.select().from(workLogs).where(eq(workLogs.id, logId));
     if (!log[0]) return res.status(404).json({ error: "Work log not found" });
-    if (!isSuperAdmin(req) && req.user.email !== 'mdlouza@gmail.com' && log[0].userId !== req.user.id) {
+    if (!isSuperAdmin(user) && user.email !== 'mdlouza@gmail.com' && log[0].userId !== user.id) {
       return res.status(403).json({ error: "Insufficient permissions" });
     }
     const updated = await db.update(workLogs).set({
@@ -106,26 +126,30 @@ router.put("/work-logs/:id", isAuthenticated, async (req, res) => {
     }).where(eq(workLogs.id, logId)).returning();
     res.json(updated[0]);
   } catch (error) {
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to update work log" });
   }
 });
 
 // Delete a work log (own or any if super admin)
-router.delete("/work-logs/:id", isAuthenticated, async (req, res) => {
-  const logId = parseInt(req.params.id);
-  console.log("[WORK LOGS DELETE] Attempting to delete log ID:", logId);
-  
-  if (isNaN(logId)) return res.status(400).json({ error: "Invalid log ID" });
-  
+router.delete("/work-logs/:id", verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
+    const logId = parseInt(req.params.id);
+    console.log("[WORK LOGS DELETE] Attempting to delete log ID:", logId);
+    
+    if (isNaN(logId)) return res.status(400).json({ error: "Invalid log ID" });
+    
     console.log("[WORK LOGS DELETE] Fetching log for permission check...");
     const log = await db.select().from(workLogs).where(eq(workLogs.id, logId));
     console.log("[WORK LOGS DELETE] Found log:", log[0] ? `ID ${log[0].id}, User ${log[0].userId}` : "None");
     
     if (!log[0]) return res.status(404).json({ error: "Work log not found" });
     
-    const hasPermission = isSuperAdmin(req) || req.user.email === 'mdlouza@gmail.com' || log[0].userId === req.user.id;
-    console.log("[WORK LOGS DELETE] Permission check:", { hasPermission, userRole: req.user.role, userEmail: req.user.email, logUserId: log[0].userId });
+    const hasPermission = isSuperAdmin(user) || user.email === 'mdlouza@gmail.com' || log[0].userId === user.id;
+    console.log("[WORK LOGS DELETE] Permission check:", { hasPermission, userRole: user.role, userEmail: user.email, logUserId: log[0].userId });
     
     if (!hasPermission) {
       return res.status(403).json({ error: "Insufficient permissions" });
@@ -138,7 +162,10 @@ router.delete("/work-logs/:id", isAuthenticated, async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error("[WORK LOGS DELETE] Error:", error);
-    console.error("[WORK LOGS DELETE] Stack trace:", error.stack);
+    console.error("[WORK LOGS DELETE] Stack trace:", (error as Error).stack);
+    if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ error: "Failed to delete work log" });
   }
 });

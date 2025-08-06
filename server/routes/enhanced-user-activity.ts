@@ -1,13 +1,14 @@
 import { Router } from 'express';
-import { isAuthenticated } from '../temp-auth';
+import { verifySupabaseToken } from '../middleware/supabase-auth';
 import { IStorage } from '../storage.ts';
+import { storage } from '../storage-wrapper';
 import { sql, eq, and, desc, asc, count } from 'drizzle-orm';
 
 export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
   const router = Router();
 
   // Enhanced system statistics with granular insights
-  router.get('/enhanced-stats', isAuthenticated, async (req, res) => {
+  router.get('/enhanced-stats', verifySupabaseToken, async (req, res) => {
     try {
       const days = parseInt(req.query.days as string) || 7;
       const startDate = new Date();
@@ -127,7 +128,7 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
   });
 
   // Detailed user activities with behavioral insights
-  router.get('/detailed-users', isAuthenticated, async (req, res) => {
+  router.get('/detailed-users', verifySupabaseToken, async (req, res) => {
     try {
       const days = parseInt(req.query.days as string) || 7;
       const startDate = new Date();
@@ -220,7 +221,7 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
   });
 
   // Activity logs with filtering
-  router.get('/logs', isAuthenticated, async (req, res) => {
+  router.get('/logs', verifySupabaseToken, async (req, res) => {
     try {
       const days = parseInt(req.query.days as string) || 7;
       const userId = req.query.userId as string;
@@ -271,7 +272,7 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
   });
 
   // Individual user statistics
-  router.get('/user-stats/:userId', isAuthenticated, async (req, res) => {
+  router.get('/user-stats/:userId', verifySupabaseToken, async (req, res) => {
     try {
       const { userId } = req.params;
       const days = parseInt(req.query.days as string) || 7;
@@ -389,11 +390,18 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
   });
 
   // Real-time activity tracking (for live updates)
-  router.post('/track', isAuthenticated, async (req, res) => {
+  router.post('/track', verifySupabaseToken, async (req, res) => {
     try {
-      const user = (req as any).user;
-      if (!user?.id) {
+      // Get the Supabase user from the token
+      const supabaseUser = (req as any).user;
+      if (!supabaseUser?.email) {
         return res.status(401).json({ error: 'User not authenticated' });
+      }
+
+      // Get the full user data from database
+      const user = await storage.getUserByEmail(supabaseUser.email);
+      if (!user) {
+        return res.status(401).json({ error: 'User not found in database' });
       }
 
       const {

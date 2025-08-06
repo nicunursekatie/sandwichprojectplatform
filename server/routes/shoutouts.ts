@@ -1,18 +1,47 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { isAuthenticated, requirePermission } from '../temp-auth';
+import { verifySupabaseToken } from '../middleware/supabase-auth';
 import { storage } from '../storage-wrapper';
 import { sendEmail } from '../services/sendgrid';
 
 const router = Router();
 
+// Helper function to get user data from Supabase user
+const getUserFromSupabase = async (req: any) => {
+  const supabaseUser = req.user;
+  if (!supabaseUser || !supabaseUser.email) {
+    throw new Error("User not authenticated");
+  }
+
+  const user = await storage.getUserByEmail(supabaseUser.email);
+  if (!user) {
+    throw new Error("User not found in database");
+  }
+
+  return user;
+};
+
+// Helper function to check if user has permission
+const checkPermission = (user: any, permission: string) => {
+  if (permission === 'MANAGE_USERS') {
+    return user.role === 'admin' || user.role === 'super_admin';
+  }
+  return user.permissions?.includes(permission) || false;
+};
+
 // Test SendGrid configuration endpoint
-router.post('/test', isAuthenticated, requirePermission('MANAGE_USERS'), async (req, res) => {
+router.post('/test', verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
+    
+    if (!checkPermission(user, 'MANAGE_USERS')) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    
     console.log('🧪 Testing SendGrid configuration...');
     
     // Test with user's email
-    const testEmail = req.user?.email || 'admin@sandwich.project';
+    const testEmail = user.email || 'admin@sandwich.project';
     
     // Try different "from" addresses to identify the issue
     const fromAddresses = [
@@ -57,6 +86,9 @@ router.post('/test', isAuthenticated, requirePermission('MANAGE_USERS'), async (
     
   } catch (error: any) {
     console.error('SendGrid test error:', error);
+    if (error.message?.includes("not authenticated") || error.message?.includes("not found in database")) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({
       error: 'SendGrid test failed',
       message: error.message,
@@ -74,8 +106,14 @@ const sendShoutoutSchema = z.object({
 });
 
 // Send shoutout endpoint
-router.post('/send', isAuthenticated, requirePermission('MANAGE_USERS'), async (req, res) => {
+router.post('/send', verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
+    
+    if (!checkPermission(user, 'MANAGE_USERS')) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    
     const { subject, message, recipientGroup, templateName } = sendShoutoutSchema.parse(req.body);
     
     // Get all users
@@ -195,7 +233,7 @@ router.post('/send', isAuthenticated, requirePermission('MANAGE_USERS'), async (
         recipientCount: validRecipients.length,
         sentAt: new Date().toISOString(),
         status: failureCount === 0 ? 'sent' : (successCount === 0 ? 'failed' : 'partial'),
-        sentBy: req.user?.email || 'unknown',
+        sentBy: user.email || 'unknown',
         successCount,
         failureCount
       });
@@ -228,6 +266,10 @@ router.post('/send', isAuthenticated, requirePermission('MANAGE_USERS'), async (
   } catch (error: any) {
     console.error('Error sending shoutout:', error);
     
+    if (error.message?.includes("not authenticated") || error.message?.includes("not found in database")) {
+      return res.status(401).json({ error: error.message });
+    }
+    
     if (error instanceof z.ZodError) {
       return res.status(400).json({ 
         error: 'Invalid request data', 
@@ -243,12 +285,21 @@ router.post('/send', isAuthenticated, requirePermission('MANAGE_USERS'), async (
 });
 
 // Get shoutout history
-router.get('/history', isAuthenticated, requirePermission('MANAGE_USERS'), async (req, res) => {
+router.get('/history', verifySupabaseToken, async (req, res) => {
   try {
+    const user = await getUserFromSupabase(req);
+    
+    if (!checkPermission(user, 'MANAGE_USERS')) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    
     const history = await storage.getShoutoutHistory();
     res.json(history);
   } catch (error: any) {
     console.error('Error fetching shoutout history:', error);
+    if (error.message?.includes("not authenticated") || error.message?.includes("not found in database")) {
+      return res.status(401).json({ error: error.message });
+    }
     res.status(500).json({ 
       error: 'Failed to fetch shoutout history',
       message: error.message

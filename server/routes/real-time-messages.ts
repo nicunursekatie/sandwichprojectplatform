@@ -1,10 +1,10 @@
 import express from "express";
 import { z } from "zod";
 import { storage } from "../storage-wrapper";
-import { isAuthenticated } from "../temp-auth";
+import { verifySupabaseToken } from '../middleware/supabase-auth';
 
 // Use the existing authentication middleware
-const requireAuth = isAuthenticated;
+const requireAuth = verifySupabaseToken;
 
 const router = express.Router();
 
@@ -38,7 +38,18 @@ interface RealTimeMessage {
 // Get messages by folder
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const userId = (req.user as any).id;
+    const supabaseUser = (req.user as any);
+    if (!supabaseUser || !supabaseUser.email) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ error: "User not found in database" });
+    }
+
+    const userId = user.id;
     const folder = req.query.folder as string || 'inbox';
     
     let messages: RealTimeMessage[] = [];
@@ -95,8 +106,8 @@ router.get("/", requireAuth, async (req, res) => {
           return {
             id: msg.id.toString(),
             from: {
-              name: (req.user as any).firstName ? `${(req.user as any).firstName} ${(req.user as any).lastName || ''}`.trim() : (req.user as any).email || 'You',
-              email: (req.user as any).email || 'unknown@sandwich.project'
+              name: user.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : user.email || 'You',
+              email: user.email || 'unknown@sandwich.project'
             },
             to: [recipientEmail], // Show actual recipient
             subject: msg.contextType || 'No Subject',
@@ -137,7 +148,7 @@ router.get("/", requireAuth, async (req, res) => {
               name: senderName,
               email: senderEmail
             },
-            to: [(req.user as any).email],
+            to: [user.email],
             subject: msg.contextType || 'No Subject',
             content: msg.content,
             timestamp: msg.createdAt?.toISOString() || new Date().toISOString(),
@@ -165,9 +176,20 @@ router.get("/", requireAuth, async (req, res) => {
 // Send new message
 router.post("/", requireAuth, async (req, res) => {
   try {
+    const supabaseUser = (req.user as any);
+    if (!supabaseUser || !supabaseUser.email) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ error: "User not found in database" });
+    }
+
     const { to, subject, content } = SendMessageSchema.parse(req.body);
-    const senderId = (req.user as any).id;
-    const senderName = `${(req.user as any).firstName || ''} ${(req.user as any).lastName || ''}`.trim() || (req.user as any).email || 'User';
+    const senderId = user.id;
+    const senderName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'User';
     
     // Create proper message object for database storage
     const messageData = {
@@ -190,7 +212,7 @@ router.post("/", requireAuth, async (req, res) => {
           id: savedMessage.id.toString(),
           from: {
             name: senderName,
-            email: (req.user as any).email || 'unknown@example.com'
+            email: user.email || 'unknown@example.com'
           },
           to: [to],
           subject,
@@ -217,8 +239,19 @@ router.post("/", requireAuth, async (req, res) => {
 // Mark message as read
 router.post("/:id/read", requireAuth, async (req, res) => {
   try {
+    const supabaseUser = (req.user as any);
+    if (!supabaseUser || !supabaseUser.email) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ error: "User not found in database" });
+    }
+
     const messageId = parseInt(req.params.id);
-    const userId = (req.user as any).id;
+    const userId = user.id;
     
     // Update the message read status in the database
     try {
@@ -237,8 +270,19 @@ router.post("/:id/read", requireAuth, async (req, res) => {
 // Toggle star status
 router.post("/:id/star", requireAuth, async (req, res) => {
   try {
+    const supabaseUser = (req.user as any);
+    if (!supabaseUser || !supabaseUser.email) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ error: "User not found in database" });
+    }
+
     const messageId = req.params.id;
-    const userId = (req.user as any).id;
+    const userId = user.id;
     
     // In a real implementation, you'd update star status in database
     res.json({ message: "Message star status updated" });
@@ -251,8 +295,19 @@ router.post("/:id/star", requireAuth, async (req, res) => {
 // Delete message
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
+    const supabaseUser = (req.user as any);
+    if (!supabaseUser || !supabaseUser.email) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ error: "User not found in database" });
+    }
+
     const messageId = parseInt(req.params.id);
-    const userId = (req.user as any).id;
+    const userId = user.id;
     
     console.log(`Delete message ${messageId} for user ${userId}`);
     
