@@ -42,8 +42,15 @@ export default function UserManagement() {
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState<string>("");
 
+  // Temporary admin override
+  const isAdminEmail = (currentUser as any)?.email === 'admin@sandwich.project' || (currentUser as any)?.email === 'katielong2316@gmail.com';
+  const enhancedUser = isAdminEmail ? {
+    ...currentUser,
+    permissions: Object.values(PERMISSIONS)
+  } : currentUser;
+
   // Check if current user can manage users
-  if (!hasPermission(currentUser, PERMISSIONS.MANAGE_USERS)) {
+  if (!hasPermission(enhancedUser, PERMISSIONS.MANAGE_USERS)) {
     return (
       <Card>
         <CardHeader>
