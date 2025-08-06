@@ -94,9 +94,9 @@ router.post('/', verifySupabaseToken, async (req: any, res) => {
       subject,
       content,
       // Threading removed
-      contextType: contextType || null,
-      contextId: contextId || null,
-      contextTitle: contextTitle || null,
+      contextType: contextType || undefined,
+      contextId: contextId || undefined,
+      contextTitle: contextTitle || undefined,
       isDraft: isDraft || false,
     });
 
@@ -195,11 +195,18 @@ router.get('/unread-count', verifySupabaseToken, async (req: any, res) => {
 });
 
 // Search emails
-router.get('/search', isAuthenticated, async (req: any, res) => {
+router.get('/search', verifySupabaseToken, async (req: any, res) => {
   try {
-    const user = req.user;
-    if (!user?.id) {
+    // Get the Supabase user from the token
+    const supabaseUser = req.user;
+    if (!supabaseUser?.email) {
       return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    // Get the full user data from database
+    const user = await storage.getUserByEmail(supabaseUser.email);
+    if (!user) {
+      return res.status(401).json({ message: 'User not found in database' });
     }
 
     const searchTerm = req.query.q as string;
