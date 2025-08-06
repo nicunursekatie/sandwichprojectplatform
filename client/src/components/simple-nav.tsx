@@ -43,15 +43,6 @@ export default function SimpleNav({ onSectionChange, activeSection, isCollapsed 
   const { user } = useAuth();
   const [location] = useLocation();
   const { unreadCounts, totalUnread } = useMessaging();
-  
-  // Temporary admin override
-  const isAdminEmail = (user as any)?.email === 'admin@sandwich.project' || (user as any)?.email === 'katielong2316@gmail.com';
-  const enhancedUser = isAdminEmail ? {
-    ...user,
-    permissions: Object.values(PERMISSIONS)
-  } : user;
-  
-  console.log('SimpleNav - User email:', (user as any)?.email, 'Is Admin:', isAdminEmail);
 
   // Get Gmail inbox unread count
   const { data: gmailUnreadCount = 0 } = useQuery({
