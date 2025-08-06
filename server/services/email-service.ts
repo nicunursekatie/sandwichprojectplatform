@@ -1,5 +1,6 @@
 import { db } from "../db";
-import { emailMessages, users } from "@shared/schema";
+import { users } from "@shared/schema";
+import { emailMessages } from "../../migrations/schema";
 import { eq, and, or, desc, isNull, sql, inArray } from "drizzle-orm";
 
 export interface EmailMessage {

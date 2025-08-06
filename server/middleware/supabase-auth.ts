@@ -7,6 +7,9 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseServiceKey) {
   console.error('ERROR: SUPABASE_SERVICE_ROLE_KEY not set. Server-side auth verification will fail.');
+} else {
+  console.log('[Supabase Auth] Service role key loaded, length:', supabaseServiceKey.length);
+  console.log('[Supabase Auth] Supabase URL:', supabaseUrl);
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey || '', {
@@ -32,19 +35,26 @@ export const verifySupabaseToken = async (req: Request, res: Response, next: Nex
   try {
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
+    console.log('[Supabase Auth] Verifying token for:', req.method, req.path);
+    console.log('[Supabase Auth] Authorization header present:', !!authHeader);
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[Supabase Auth] No Bearer token found');
       return res.status(401).json({ error: 'No authorization token provided' });
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    console.log('[Supabase Auth] Token length:', token.length);
 
     // Verify the token with Supabase
     const { data: { user }, error } = await supabase.auth.getUser(token);
 
     if (error || !user) {
+      console.log('[Supabase Auth] Token verification failed:', error?.message || 'No user returned');
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
+    
+    console.log('[Supabase Auth] Token verified for user:', user.email);
 
     // Attach user to request object
     req.user = user;
