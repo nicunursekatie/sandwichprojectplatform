@@ -34,6 +34,8 @@ import { useState } from "react";
 import * as React from "react";
 import { useAuth } from '@/contexts/AuthContext';
 import { hasPermission, PERMISSIONS } from "@shared/auth-utils";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { queryClient } from "@/lib/queryClient";
 import SimpleNav from "@/components/simple-nav";
 import AnnouncementBanner from "@/components/announcement-banner";
@@ -94,7 +96,17 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
   const [expandedSections, setExpandedSections] = useState<string[]>([]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const { user, loading: isLoading } = useAuth();
+  const { user: authUser, loading: authLoading } = useAuth();
+  
+  // Fetch enhanced user data with permissions
+  const { data: userData, isLoading: userLoading } = useQuery({
+    queryKey: ['/api/auth/user', authUser?.id],
+    enabled: !!authUser,
+  });
+  
+  // Use enhanced user data if available, otherwise fallback to auth user
+  const user = userData ? userData as any : authUser;
+  const isLoading = authLoading || userLoading;
 
   // Make setActiveSection available globally for project detail navigation
   React.useEffect(() => {

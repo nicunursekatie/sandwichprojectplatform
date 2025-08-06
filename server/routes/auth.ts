@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { verifySupabaseToken, optionalSupabaseAuth } from "../middleware/supabase-auth.js";
+import { getDefaultPermissionsForRole } from "../../shared/auth-utils.js";
 
 const router = Router();
 
@@ -9,14 +10,18 @@ router.get("/auth/user", optionalSupabaseAuth, (req, res) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
-  // Return the Supabase user data
+  // Get role and permissions
+  const role = req.user.user_metadata?.role || "viewer";
+  const permissions = req.user.user_metadata?.permissions || getDefaultPermissionsForRole(role);
+
+  // Return the Supabase user data with permissions
   res.json({
     id: req.user.id,
     email: req.user.email,
     firstName: req.user.user_metadata?.firstName || "",
     lastName: req.user.user_metadata?.lastName || "",
-    role: req.user.user_metadata?.role || "viewer",
-    permissions: req.user.user_metadata?.permissions || []
+    role: role,
+    permissions: permissions
   });
 });
 
@@ -28,6 +33,10 @@ router.get("/auth/profile", optionalSupabaseAuth, (req, res) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
+  // Get role and permissions
+  const role = req.user.user_metadata?.role || "viewer";
+  const permissions = req.user.user_metadata?.permissions || getDefaultPermissionsForRole(role);
+
   // Return the user profile data
   const profileData = {
     id: req.user.id,
@@ -35,8 +44,8 @@ router.get("/auth/profile", optionalSupabaseAuth, (req, res) => {
     firstName: req.user.user_metadata?.firstName || req.user.user_metadata?.first_name || "",
     lastName: req.user.user_metadata?.lastName || req.user.user_metadata?.last_name || "",
     displayName: req.user.user_metadata?.display_name || `${req.user.user_metadata?.firstName || ''} ${req.user.user_metadata?.lastName || ''}`.trim() || req.user.email?.split('@')[0] || "",
-    role: req.user.user_metadata?.role || "viewer",
-    permissions: req.user.user_metadata?.permissions || []
+    role: role,
+    permissions: permissions
   };
   
   console.log('Returning profile data:', profileData);
