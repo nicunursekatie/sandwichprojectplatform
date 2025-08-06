@@ -233,7 +233,7 @@ export function useMessaging() {
     } catch (error) {
       console.error('Failed to construct WebSocket URL:', error);
       // Last resort fallback
-      wsUrl = `ws://localhost:5000/notifications`;
+      wsUrl = `ws://localhost:5001/notifications`;
     }
     
     let ws: WebSocket;
