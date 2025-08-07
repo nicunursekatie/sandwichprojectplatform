@@ -262,15 +262,20 @@ export const projectAssignments = pgTable("project_assignments", {
 ]);
 
 export const sandwichCollections = pgTable("sandwich_collections", {
-	id: numeric().primaryKey().notNull(),
-	collectionDate: text("collection_date"),
+	id: bigint({ mode: "bigint" }).primaryKey().notNull(),
+	collectionDate: date("collection_date").notNull(),
 	hostName: text("host_name").notNull(),
-	individualSandwiches: numeric("individual_sandwiches").notNull(),
-	groupCollections: text("group_collections").notNull(),
-	submittedAt: text("submitted_at"),
+	individualSandwiches: bigint("individual_sandwiches", { mode: "bigint" }).notNull(),
+	group1Name: text("group1_name"),
+	group1Count: bigint("group1_count", { mode: "bigint" }),
+	group2Name: text("group2_name"),
+	group2Count: bigint("group2_count", { mode: "bigint" }),
+	submittedAt: jsonb("submitted_at"),
+	createdBy: text("created_by"),
+	createdByName: text("created_by_name"),
+	submissionMethod: text("submission_method"),
 	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }),
 	deletedBy: varchar("deleted_by", { length: 255 }),
-	groupCount: numeric("group_count"),
 }, (table) => [
 	index("idx_sandwich_collections_deleted_at").using("btree", table.deletedAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(deleted_at IS NULL)`),
 ]);

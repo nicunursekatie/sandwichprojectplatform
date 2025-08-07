@@ -226,7 +226,7 @@ export default function SandwichCollectionLog() {
           // Add 23:59:59 to include the entire day
           toDate.setHours(23, 59, 59, 999);
           filteredCollections = filteredCollections.filter((c: SandwichCollection) => 
-            new Date(c.submittedAt) <= toDate
+            c.submittedAt && new Date(c.submittedAt) <= toDate
           );
         }
         
@@ -1043,8 +1043,10 @@ export default function SandwichCollectionLog() {
 
   // Helper functions for edit group collections
   const addEditGroupRow = () => {
-    const newId = `edit-${Date.now()}`;
-    setEditGroupCollections([...editGroupCollections, { id: newId, groupName: "", sandwichCount: 0 }]);
+    if (editGroupCollections.length < 2) {
+      const newId = `edit-${Date.now()}`;
+      setEditGroupCollections([...editGroupCollections, { id: newId, groupName: "", sandwichCount: 0 }]);
+    }
   };
 
   const removeEditGroupRow = (id: string) => {
@@ -1103,31 +1105,33 @@ export default function SandwichCollectionLog() {
       }
     }
 
-    // Format group collections as JSON to match the schema
+    // Format group collections for new schema (max 2 groups)
     const validGroupCollections = newGroupCollections.filter(group => group.sandwichCount > 0);
-    const formattedGroupCollections = validGroupCollections.length > 0 
-      ? JSON.stringify(validGroupCollections.map(g => ({ 
-          name: g.groupName.trim() || "Unnamed Group", 
-          count: g.sandwichCount 
-        })))
-      : '[]';
-
+    
     const submissionData = {
       collectionDate: newCollectionData.collectionDate,
       hostName: newCollectionGroupOnlyMode ? "Groups - Unassigned" : newCollectionData.hostName,
       individualSandwiches: newCollectionGroupOnlyMode ? 0 : parseInt(newCollectionData.individualSandwiches) || 0,
-      groupCollections: formattedGroupCollections
+      group1Name: validGroupCollections[0]?.groupName?.trim() || null,
+      group1Count: validGroupCollections[0]?.sandwichCount || null,
+      group2Name: validGroupCollections[1]?.groupName?.trim() || null,
+      group2Count: validGroupCollections[1]?.sandwichCount || null,
+      submissionMethod: 'admin_panel',
+      createdBy: user?.id || 'admin',
+      createdByName: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Admin User',
     };
 
     createMutation.mutate(submissionData);
   };
 
   const addNewGroupRow = () => {
-    setNewGroupCollections([...newGroupCollections, { 
-      id: Math.random().toString(36), 
-      groupName: "", 
-      sandwichCount: 0 
-    }]);
+    if (newGroupCollections.length < 2) {
+      setNewGroupCollections([...newGroupCollections, { 
+        id: Math.random().toString(36), 
+        groupName: "", 
+        sandwichCount: 0 
+      }]);
+    }
   };
 
   const removeNewGroupRow = (id: string) => {

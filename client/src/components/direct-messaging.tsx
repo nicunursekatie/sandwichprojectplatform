@@ -87,7 +87,7 @@ export default function DirectMessaging() {
           queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
         } catch (error) {
           console.error('Failed to create conversation:', error);
-          if (error.message.includes('401')) {
+          if (typeof error === "object" && error !== null && "message" in error && typeof (error as any).message === "string" && (error as any).message.includes('401')) {
             toast({ title: "Authentication error - please refresh the page", variant: "destructive" });
           } else {
             toast({ title: "Failed to create conversation", variant: "destructive" });
@@ -629,6 +629,8 @@ export default function DirectMessaging() {
           </Card>
         )}
       </div>
+        </>
+      )}
     </div>
   );
 }

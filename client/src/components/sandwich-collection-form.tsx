@@ -137,9 +137,11 @@ export default function SandwichCollectionForm({
     return individual + groupTotal;
   };
 
-  // Add group
+  // Add group (limited to 2 groups max)
   const addGroup = () => {
-    setGroups([...groups, { id: Date.now().toString(), name: "", count: 0 }]);
+    if (groups.length < 2) {
+      setGroups([...groups, { id: Date.now().toString(), name: "", count: 0 }]);
+    }
   };
 
   // Remove group
@@ -188,16 +190,20 @@ export default function SandwichCollectionForm({
       }
     }
 
+    // Filter and prepare group data for the new schema (max 2 groups)
+    const validGroups = groups.filter((g) => g.name.trim() && g.count > 0);
+    
     const collectionData = {
       collectionDate: date,
       hostName: finalLocation,
       individualSandwiches: parseInt(individualCount) || 0,
-      groupSandwiches: groups.reduce(
-        (sum, group) => sum + (group.count || 0),
-        0,
-      ),
-      groupCollections: groups.filter((g) => g.name.trim() && g.count > 0),
-      notes: `Submitted via collection form on ${new Date().toLocaleString()}`,
+      group1Name: validGroups[0]?.name || null,
+      group1Count: validGroups[0]?.count || null,
+      group2Name: validGroups[1]?.name || null,
+      group2Count: validGroups[1]?.count || null,
+      submissionMethod: 'web_form',
+      createdBy: 'web_user', // You might want to get this from auth context
+      createdByName: 'Web Form User', // You might want to get this from auth context
     };
 
     submitMutation.mutate(collectionData);
@@ -722,17 +728,26 @@ export default function SandwichCollectionForm({
               <button
                 type="button"
                 onClick={addGroup}
-                style={addGroupButtonStyle}
+                disabled={groups.length >= 2}
+                style={{
+                  ...addGroupButtonStyle,
+                  opacity: groups.length >= 2 ? 0.5 : 1,
+                  cursor: groups.length >= 2 ? 'not-allowed' : 'pointer'
+                }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "#236383";
-                  e.currentTarget.style.background = "rgba(35, 99, 131, 0.05)";
+                  if (groups.length < 2) {
+                    e.currentTarget.style.borderColor = "#236383";
+                    e.currentTarget.style.background = "rgba(35, 99, 131, 0.05)";
+                  }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "#236383";
-                  e.currentTarget.style.background = "transparent";
+                  if (groups.length < 2) {
+                    e.currentTarget.style.borderColor = "#236383";
+                    e.currentTarget.style.background = "transparent";
+                  }
                 }}
               >
-                + Add Group
+                + Add Group {groups.length >= 2 ? '(Max 2)' : ''}
               </button>
             </div>
           ) : (
@@ -753,18 +768,27 @@ export default function SandwichCollectionForm({
                 <button
                   type="button"
                   onClick={addGroup}
-                  style={addGroupBtnStyle}
+                  disabled={groups.length >= 2}
+                  style={{
+                    ...addGroupBtnStyle,
+                    opacity: groups.length >= 2 ? 0.5 : 1,
+                    cursor: groups.length >= 2 ? 'not-allowed' : 'pointer'
+                  }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = "#236383";
-                    e.currentTarget.style.background =
-                      "rgba(35, 99, 131, 0.05)";
+                    if (groups.length < 2) {
+                      e.currentTarget.style.borderColor = "#236383";
+                      e.currentTarget.style.background =
+                        "rgba(35, 99, 131, 0.05)";
+                    }
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "#236383";
-                    e.currentTarget.style.background = "transparent";
+                    if (groups.length < 2) {
+                      e.currentTarget.style.borderColor = "#236383";
+                      e.currentTarget.style.background = "transparent";
+                    }
                   }}
                 >
-                  + Add Group
+                  + Add Group {groups.length >= 2 ? '(Max 2)' : ''}
                 </button>
               </div>
 
