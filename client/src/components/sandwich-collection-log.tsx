@@ -216,8 +216,8 @@ export default function SandwichCollectionLog() {
         
         if (debouncedSearchFilters.createdAtFrom) {
           const fromDate = new Date(debouncedSearchFilters.createdAtFrom);
-          filteredCollections = filteredCollections.filter((c: SandwichCollection) => 
-            new Date(c.submittedAt) >= fromDate
+          filteredCollections = filteredCollections.filter((c: SandwichCollection) =>
+            c.submittedAt && new Date(c.submittedAt) >= fromDate
           );
         }
         
@@ -813,7 +813,7 @@ export default function SandwichCollectionLog() {
         return calculateTotal(collection);
       };
 
-      const headers = [
+      const csvHeaders = [
         "ID", 
         "Host Name", 
         "Collection Date",
@@ -826,7 +826,7 @@ export default function SandwichCollectionLog() {
       ];
       
       const csvData = [
-        headers.join(","),
+        csvHeaders.join(","),
         ...allCollections.map((collection: SandwichCollection) => [
           collection.id,
           `"${collection.hostName}"`,
@@ -835,8 +835,8 @@ export default function SandwichCollectionLog() {
           calculateGroupTotalForCSV(collection),
           `"${formatGroupCollections(collection)}"`,
           calculateTotalForCSV(collection),
-          `"${new Date(collection.submittedAt).toLocaleString()}"`,
-          `"${collection.createdByName || 'Unknown'}"`
+          `"${collection.submittedAt ? new Date(collection.submittedAt).toLocaleString() : ''}"`,
+          `"Unknown"`
         ].join(","))
       ].join("\n");
 
@@ -998,11 +998,11 @@ export default function SandwichCollectionLog() {
     
     // Parse existing group collections from new schema fields
     const groupList = [];
-    if (collection.group1Name && collection.group1Count) {
+    if (collection.group1_name && collection.group1_count) {
       groupList.push({
         id: "edit-1",
-        groupName: collection.group1Name,
-        sandwichCount: collection.group1Count
+        groupName: collection.group1_name,
+        sandwichCount: collection.group1_count
       });
     }
     if (collection.group2Name && collection.group2Count) {
