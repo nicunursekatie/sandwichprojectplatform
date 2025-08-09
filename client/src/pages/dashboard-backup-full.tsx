@@ -538,7 +538,6 @@ export default function Dashboard({ initialSection = "dashboard" }: { initialSec
             <div className="max-w-full overflow-x-hidden">
               {renderContent()}
             </div>
-          </div>
         </div>
       </div>
     </div>

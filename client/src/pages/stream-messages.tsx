@@ -1060,4 +1060,3 @@ export default function StreamMessagesPage() {
       </div>
     </div>
   );
-}
