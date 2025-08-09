@@ -8,6 +8,7 @@ export default defineConfig({
   
   // IMPORTANT: Set base to your GitHub repository name
   base: '/Sandwich-Project-Platform/',  // Update this to match your repo name
+  root: path.resolve(__dirname, 'client'),
   
   resolve: {
     alias: {
@@ -18,7 +19,7 @@ export default defineConfig({
   },
   
   build: {
-    outDir: 'dist',
+    outDir: path.resolve(__dirname, 'dist/public'),
     sourcemap: false,
     minify: 'terser',
     rollupOptions: {
