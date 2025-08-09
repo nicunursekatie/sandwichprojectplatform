@@ -8,12 +8,19 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+// Parse DATABASE_URL to check if it includes SSL parameters
+const connectionString = process.env.DATABASE_URL;
+const isSSLRequired = connectionString?.includes('sslmode=require') || 
+                      process.env.NODE_ENV === 'production';
+
 // Create a PostgreSQL pool for Supabase connection
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false // Required for Supabase connections
-  }
+  ...(isSSLRequired && {
+    ssl: {
+      rejectUnauthorized: false
+    }
+  })
 });
 
 export const db = drizzle(pool, { schema });
