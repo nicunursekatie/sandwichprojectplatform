@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   
   // IMPORTANT: Set base to your GitHub repository name
-  base: '/Sandwich-Project-Platform/',  // Update this to match your repo name
+  base: '/sandwichprojectplatform/',  // Matches your GitHub Pages URL
   root: path.resolve(__dirname, 'client'),
   
   resolve: {
