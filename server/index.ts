@@ -84,19 +84,6 @@ async function startServer() {
       });
     });
 
-    if (process.env.NODE_ENV === "production") {
-      // In production, serve static files from the built frontend
-      app.use(express.static("dist/public"));
-
-      // Simple SPA fallback for production - serve index.html for non-API routes
-      app.get(/^(?!\/api).*/, async (_req: Request, res: Response) => {
-        const path = await import("path");
-        res.sendFile(path.join(process.cwd(), "dist/public/index.html"));
-      });
-
-      console.log("✓ Static file serving and SPA routing configured for production");
-    }
-
     const finalPort = port;
 
     const httpServer = createServer(app);
@@ -110,12 +97,26 @@ async function startServer() {
       path: '/notifications'
     });
 
-    // CRITICAL FIX: Register all API routes BEFORE Vite middleware to prevent route interception
+    // CRITICAL FIX: Register all API routes FIRST before static files
     try {
       await registerRoutes(app);
-      console.log("✓ API routes registered BEFORE Vite middleware");
+      console.log("✓ API routes registered successfully");
     } catch (error) {
       console.error("✗ Route registration failed:", error);
+    }
+
+    // Set up static file serving AFTER API routes in production
+    if (process.env.NODE_ENV === "production") {
+      // In production, serve static files from the built frontend
+      app.use(express.static("dist/public"));
+
+      // Simple SPA fallback for production - serve index.html for non-API routes
+      app.get(/^(?!\/api).*/, async (_req: Request, res: Response) => {
+        const path = await import("path");
+        res.sendFile(path.join(process.cwd(), "dist/public/index.html"));
+      });
+
+      console.log("✓ Static file serving and SPA routing configured for production");
     }
 
     // Set up Vite middleware AFTER API routes to prevent catch-all interference

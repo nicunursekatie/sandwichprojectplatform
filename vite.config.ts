@@ -4,7 +4,8 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 export default defineConfig({
-  base: '/Sandwich-Project-Platform/',
+  // Use '/' for Render deployment, '/sandwichprojectplatform/' for GitHub Pages
+  base: process.env.GITHUB_PAGES ? '/sandwichprojectplatform/' : '/',
   plugins: [
     react(),
     runtimeErrorOverlay(),
