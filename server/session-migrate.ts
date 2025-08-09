@@ -5,6 +5,12 @@ export async function ensureSessionsTable() {
   try {
     console.log("Checking sessions table...");
     
+    // Skip sessions table creation if using memory store
+    if (process.env.USE_MEMORY_SESSION_STORE === 'true') {
+      console.log("Using memory session store - skipping sessions table creation");
+      return;
+    }
+    
     // Create sessions table if it doesn't exist
     // This matches the schema expected by connect-pg-simple
     await db.execute(sql`
@@ -24,7 +30,8 @@ export async function ensureSessionsTable() {
     console.log("Sessions table ready");
   } catch (error) {
     console.error("Failed to create sessions table:", error);
-    throw error;
+    // Don't throw - allow app to continue with memory store
+    console.log("Will continue with memory-based session store");
   }
 }
 
