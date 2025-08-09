@@ -8,36 +8,52 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Parse DATABASE_URL to check if it includes SSL parameters
+// Parse DATABASE_URL and configure SSL
 const connectionString = process.env.DATABASE_URL;
 
-// Create SSL configuration based on environment
-let sslConfig: any = false;
-
-if (process.env.NODE_ENV === 'production' || connectionString?.includes('sslmode=require')) {
-  // For production or when SSL is explicitly required
-  sslConfig = {
-    rejectUnauthorized: false,
-    // Additional SSL options for compatibility
-    ca: process.env.DATABASE_CA_CERT || undefined
-  };
-}
-
-// Special handling for Render environment
-if (process.env.RENDER) {
-  sslConfig = {
-    rejectUnauthorized: false
-  };
-}
-
-// Create a PostgreSQL pool for Supabase connection
-const pool = new pg.Pool({
+// ALWAYS use SSL in production with rejectUnauthorized: false for self-signed certs
+let poolConfig: any = {
   connectionString: process.env.DATABASE_URL,
-  ssl: sslConfig,
-  // Additional connection options for stability
   max: 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000
+};
+
+// Force SSL configuration for production/Render/Supabase
+if (process.env.NODE_ENV === 'production' || 
+    process.env.RENDER || 
+    connectionString?.includes('supabase') ||
+    connectionString?.includes('pooler') ||
+    connectionString?.includes('aws') ||
+    connectionString?.includes('ssl')) {
+  poolConfig.ssl = {
+    rejectUnauthorized: false
+  };
+  console.log("Database: SSL enabled with rejectUnauthorized: false");
+} else {
+  poolConfig.ssl = false;
+  console.log("Database: SSL disabled (development mode)");
+}
+
+// Override with explicit SSL disable if needed
+if (process.env.DATABASE_NO_SSL === 'true') {
+  poolConfig.ssl = false;
+  console.log("Database: SSL explicitly disabled via DATABASE_NO_SSL");
+}
+
+// Create a PostgreSQL pool for Supabase connection
+const pool = new pg.Pool(poolConfig);
+
+// Test the connection on startup
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('Database connection error:', err.message);
+    console.error('SSL Config:', poolConfig.ssl);
+    console.error('Connection string pattern:', connectionString?.substring(0, 30) + '...');
+  } else {
+    console.log('✅ Database connection successful');
+    release();
+  }
 });
 
 export const db = drizzle(pool, { schema });
