@@ -138,22 +138,4 @@ export async function importCollectionsFromCSV(filePath: string) {
   };
 }
 
-// CLI execution
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const csvPath = process.argv[2];
-  
-  if (!csvPath) {
-    console.error('Usage: tsx server/import-collections.ts <path-to-csv-file>');
-    process.exit(1);
-  }
-
-  importCollectionsFromCSV(csvPath)
-    .then((result) => {
-      console.log(`\nImport completed: ${result.successCount}/${result.totalRecords} records imported`);
-      process.exit(result.errorCount > 0 ? 1 : 0);
-    })
-    .catch((error) => {
-      console.error('Import failed:', error);
-      process.exit(1);
-    });
-}
+// Removed CLI execution to prevent process.exit in production builds

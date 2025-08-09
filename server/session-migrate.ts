@@ -35,15 +35,4 @@ export async function ensureSessionsTable() {
   }
 }
 
-// Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  ensureSessionsTable()
-    .then(() => {
-      console.log("Session migration complete");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("Session migration failed:", error);
-      process.exit(1);
-    });
-}
+// Removed standalone execution to prevent process.exit in production builds
