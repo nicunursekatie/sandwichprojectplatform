@@ -48,6 +48,20 @@ interface DuplicateAnalysis {
   }>;
 }
 
+// Extend SandwichCollection to include group fields and createdByName for local use
+type SandwichCollectionWithGroups = SandwichCollection & {
+  group1Name?: string;
+  group1Count?: number;
+  group2Name?: string;
+  group2Count?: number;
+  group1_name?: string;
+  group1_count?: number;
+  group2_name?: string;
+  group2_count?: number;
+  createdByName?: string;
+  id: number | bigint;
+};
+
 export default function SandwichCollectionLog() {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -995,24 +1009,36 @@ export default function SandwichCollectionLog() {
       individualSandwiches: collection.individualSandwiches.toString(),
       groupCollections: "" // Not used with new schema
     });
-    
     // Parse existing group collections from new schema fields
     const groupList = [];
-    if (collection.group1_name && collection.group1_count) {
+    const col = collection as SandwichCollectionWithGroups;
+    // Prefer camelCase, fallback to snake_case
+    if (col.group1Name && col.group1Count) {
       groupList.push({
         id: "edit-1",
-        groupName: collection.group1_name,
-        sandwichCount: collection.group1_count
+        groupName: col.group1Name,
+        sandwichCount: col.group1Count
       });
-    }
-    if (collection.group2Name && collection.group2Count) {
+    } else if (col.group1_name && col.group1_count) {
       groupList.push({
-        id: "edit-2", 
-        groupName: collection.group2Name,
-        sandwichCount: collection.group2Count
+        id: "edit-1",
+        groupName: col.group1_name,
+        sandwichCount: col.group1_count
       });
     }
-    
+    if (col.group2Name && col.group2Count) {
+      groupList.push({
+        id: "edit-2",
+        groupName: col.group2Name,
+        sandwichCount: col.group2Count
+      });
+    } else if (col.group2_name && col.group2_count) {
+      groupList.push({
+        id: "edit-2",
+        groupName: col.group2_name,
+        sandwichCount: col.group2_count
+      });
+    }
     if (groupList.length > 0) {
       setEditGroupCollections(groupList);
     } else {
@@ -1036,7 +1062,7 @@ export default function SandwichCollectionLog() {
     };
 
     updateMutation.mutate({
-      id: editingCollection.id,
+      id: Number(editingCollection.id),
       updates
     });
   };
@@ -1118,7 +1144,7 @@ export default function SandwichCollectionLog() {
       group2Count: validGroupCollections[1]?.sandwichCount || null,
       submissionMethod: 'admin_panel',
       createdBy: user?.id || 'admin',
-      createdByName: user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : 'Admin User',
+      createdByName: user && 'firstName' in user && 'lastName' in user ? `${(user as any).firstName} ${(user as any).lastName}` : 'Admin User',
     };
 
     createMutation.mutate(submissionData);
@@ -1500,7 +1526,7 @@ export default function SandwichCollectionLog() {
           {paginatedCollections.map((collection: SandwichCollection) => {
             const groupData = getGroupCollections(collection);
             const totalSandwiches = calculateTotal(collection);
-            const isSelected = selectedCollections.has(collection.id);
+            const isSelected = selectedCollections.has(Number(collection.id));
 
             // Check if the host is inactive
             const hostData = hostsList.find(h => h.name === collection.hostName);
@@ -1522,9 +1548,9 @@ export default function SandwichCollectionLog() {
                   <div className="flex-1">
                     {/* Date and Host on mobile */}
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                      {(canEditAllCollections || canEditCollection(user, collection)) && (
+                      {(canEditAllCollections || canEditCollection(user, { ...collection, id: Number(collection.id) })) && (
                         <button
-                          onClick={() => handleSelectCollection(collection.id, !isSelected)}
+                          onClick={() => handleSelectCollection(Number(collection.id), !isSelected)}
                           className="flex items-center w-4 h-4 shrink-0"
                         >
                           {isSelected ? (
@@ -1576,7 +1602,7 @@ export default function SandwichCollectionLog() {
                       <div className={`text-xs ${isInactiveHost ? 'text-gray-500' : 'text-slate-500'}`}>total</div>
                     </div>
                     <div className="flex items-center gap-1">
-                      {canEditCollection(user, collection) && (
+                      {canEditCollection(user, { ...collection, id: Number(collection.id) }) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -1586,11 +1612,11 @@ export default function SandwichCollectionLog() {
                           <Edit className="w-3 h-3 sm:w-4 sm:h-4" />
                         </Button>
                       )}
-                      {canDeleteCollection(user, collection) && (
+                      {canDeleteCollection(user, { ...collection, id: Number(collection.id) }) && (
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleDelete(collection.id)}
+                          onClick={() => handleDelete(Number(collection.id))}
                           className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 sm:h-8 sm:w-8 bg-white border-gray-300"
                         >
                           <Trash2 className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -1644,10 +1670,10 @@ export default function SandwichCollectionLog() {
                 <div className="mt-3 pt-3 border-t border-slate-200">
                   <div className="text-xs text-slate-500 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-1">
                     <span>
-                      Submitted {formatSubmittedAt(collection.submittedAt)}
-                      {collection.createdByName && (
+                      Submitted {collection.submittedAt ? formatSubmittedAt(collection.submittedAt) : "Unknown"}
+                      {(collection as SandwichCollectionWithGroups).createdByName && (
                         <span className="text-slate-600 font-medium ml-1">
-                          by {collection.createdByName}
+                          by {(collection as SandwichCollectionWithGroups).createdByName}
                         </span>
                       )}
                     </span>
@@ -1707,7 +1733,7 @@ export default function SandwichCollectionLog() {
                         <span className="text-sm text-slate-600">{group.count} entries</span>
                       </div>
                       <div className="text-sm text-slate-600">
-                        Will keep newest entry (ID: {group.keepNewest.id}) and remove {group.toDelete.length} duplicates
+                        Will keep newest entry (ID: {String(group.keepNewest.id)}) and remove {group.toDelete.length} duplicates
                       </div>
                     </div>
                   ))}
@@ -1723,7 +1749,7 @@ export default function SandwichCollectionLog() {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          const allIds = new Set(duplicateAnalysis.suspiciousEntries.map(entry => entry.id));
+                          const allIds = new Set(duplicateAnalysis.suspiciousEntries.map(entry => Number(entry.id)));
                           setSelectedSuspiciousIds(selectedSuspiciousIds.size === allIds.size ? new Set() : allIds);
                         }}
                         className="text-xs"
@@ -1743,14 +1769,14 @@ export default function SandwichCollectionLog() {
                         return (
                           <div key={entry.id} className="flex items-center space-x-3 p-2 border border-slate-100 rounded hover:bg-slate-50">
                             <Checkbox
-                              id={`suspicious-${entry.id}`}
-                              checked={selectedSuspiciousIds.has(entry.id)}
+                              id={`suspicious-${String(entry.id)}`}
+                              checked={selectedSuspiciousIds.has(Number(entry.id))}
                               onCheckedChange={(checked) => {
                                 const newSet = new Set(selectedSuspiciousIds);
                                 if (checked) {
-                                  newSet.add(entry.id);
+                                  newSet.add(Number(entry.id));
                                 } else {
-                                  newSet.delete(entry.id);
+                                  newSet.delete(Number(entry.id));
                                 }
                                 setSelectedSuspiciousIds(newSet);
                               }}
@@ -1759,7 +1785,7 @@ export default function SandwichCollectionLog() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-2">
                                   <span className="font-medium text-sm">"{entry.hostName || 'No Host'}"</span>
-                                  <span className="text-xs text-slate-500">ID: {entry.id}</span>
+                                  <span className="text-xs text-slate-500">ID: {String(entry.id)}</span>
                                 </div>
                                 <div className="text-sm font-medium text-slate-900">{totalSandwiches} sandwiches</div>
                               </div>
