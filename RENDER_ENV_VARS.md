@@ -1,5 +1,16 @@
 # Render Environment Variables Setup
 
+## IMPORTANT: Build Command
+In your Render dashboard, make sure your Build Command is set to:
+```bash
+npm install && npm run build
+```
+
+And your Start Command is:
+```bash
+npm run start:server
+```
+
 ## Required Environment Variables for Render Deployment
 
 Add these environment variables in your Render dashboard under Environment > Environment Variables:
