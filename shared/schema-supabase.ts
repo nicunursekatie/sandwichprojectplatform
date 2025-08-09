@@ -618,14 +618,8 @@ export const projects = pgTable("projects", {
 	assigneeNames: text("assignee_names"),
 	deletedAt: timestamp("deleted_at", { withTimezone: true, mode: 'string' }),
 	deletedBy: varchar("deleted_by", { length: 255 }),
-	startDate: date(),
-	completionDate: date(),
-	estimatedHours: integer(),
-	progressPercentage: integer(),
 	riskLevel: varchar(),
 	endDate: date(),
-	dueDate: date(),
-	assigneeName: text().generatedAlwaysAs(sql`assignee_name`),
 }, (table) => [
 	index("idx_projects_deleted_at").using("btree", table.deletedAt.asc().nullsLast().op("timestamptz_ops")).where(sql`(deleted_at IS NULL)`),
 ]);
