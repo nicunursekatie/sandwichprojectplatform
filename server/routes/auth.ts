@@ -2,7 +2,7 @@ import { Router } from "express";
 import { verifySupabaseToken, optionalSupabaseAuth } from "../middleware/supabase-auth.ts";
 import { getDefaultPermissionsForRole } from "../../shared/auth-utils.ts";
 import { createClient } from '@supabase/supabase-js';
-import { storage } from "../storage-wrapper";
+import { getSupabaseUserData } from '../utils/supabase-user-helper';
 
 const router = Router();
 
@@ -18,33 +18,27 @@ router.get("/auth/user", verifySupabaseToken, async (req: any, res) => {
   }
 
   try {
-    // Get the Supabase user
-    const supabaseUser = req.user;
+    // Get user data from Supabase (using user_permissions_summary view)
+    const userData = await getSupabaseUserData(req.user);
     
-    // Get the full user data from local database using email
-    const dbUser = await storage.getUserByEmail(supabaseUser.email);
-    
-    if (!dbUser) {
-      // User exists in Supabase but not in local database
-      // This shouldn't happen in normal operation
-      console.error(`User ${supabaseUser.email} not found in local database`);
+    if (!userData) {
       return res.status(404).json({ message: "User not found in database" });
     }
     
-    if (!dbUser.isActive) {
+    if (!userData.isActive) {
       return res.status(403).json({ message: "User account is inactive" });
     }
 
-    // Return the full user data with permissions from local database
+    // Return the user data with permissions from Supabase
     res.json({
-      id: dbUser.id,
-      email: dbUser.email,
-      firstName: dbUser.firstName || "",
-      lastName: dbUser.lastName || "",
-      displayName: dbUser.displayName || `${dbUser.firstName} ${dbUser.lastName}`.trim(),
-      profileImageUrl: dbUser.profileImageUrl,
-      role: dbUser.role,
-      permissions: dbUser.permissions || getDefaultPermissionsForRole(dbUser.role)
+      id: userData.id,
+      email: userData.email,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      displayName: userData.displayName,
+      profileImageUrl: req.user.user_metadata?.profileImageUrl,
+      role: userData.role,
+      permissions: userData.permissions
     });
   } catch (error) {
     console.error('Error in /auth/user endpoint:', error);
@@ -89,7 +83,7 @@ router.put("/auth/profile", optionalSupabaseAuth, async (req, res) => {
   }
 
   try {
-    const { firstName, lastName, displayName, email } = req.body;
+    const { firstName, lastName, displayName } = req.body;
     
     // Update user metadata in Supabase
     const { createClient } = await import('@supabase/supabase-js');
@@ -146,7 +140,7 @@ router.post("/logout", (req, res) => {
 });
 
 // Add permission management endpoints
-router.put("/auth/permissions/:userId", verifySupabaseToken, async (req, res) => {
+router.put("/auth/permissions/:userId", verifySupabaseToken, async (req: any, res) => {
   // Check if requesting user has permission to manage users
   const { data: hasPermission } = await supabase
     .from('user_permissions')

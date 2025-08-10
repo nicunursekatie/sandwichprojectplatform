@@ -3,7 +3,7 @@ import { eq, sql, and, gt, or, isNull } from "drizzle-orm";
 import { messages, messageRecipients, conversations, conversationParticipants, chatMessages, chatMessageReads } from "../../shared/schema";
 import { db } from "../db";
 import { verifySupabaseToken } from '../middleware/supabase-auth';
-import { storage } from '../storage-wrapper';
+import { getSupabaseUserData } from '../utils/supabase-user-helper';
 
 // Helper function to check if user has permission for specific chat type
 function checkUserChatPermission(user: any, chatType: string): boolean {
@@ -44,10 +44,10 @@ const getUnreadCounts = async (req: Request, res: Response) => {
         return res.status(401).json({ message: "Unauthorized" });
       }
 
-      // Get the full user data from database using Supabase user's email
-      const user = await storage.getUserByEmail(supabaseUser.email);
+      // Get the full user data from Supabase
+      const user = await getSupabaseUserData(supabaseUser);
       if (!user) {
-        console.log('Authentication failed: User not found in database');
+        console.log('Authentication failed: User not found in Supabase');
         return res.status(401).json({ message: "User not found in database" });
       }
 
@@ -172,7 +172,7 @@ const markChatMessagesRead = async (req: Request, res: Response) => {
       }
 
       // Get the full user data from database
-      const user = await storage.getUserByEmail(supabaseUser.email);
+      const user = await getSupabaseUserData(supabaseUser);
       if (!user) {
         return res.status(401).json({ error: "User not found in database" });
       }
@@ -247,7 +247,7 @@ const markMessagesRead = async (req: Request, res: Response) => {
       }
 
       // Get the full user data from database
-      const user = await storage.getUserByEmail(supabaseUser.email);
+      const user = await getSupabaseUserData(supabaseUser);
       if (!user) {
         return res.status(401).json({ error: "User not found in database" });
       }
@@ -277,7 +277,7 @@ const markAllRead = async (req: Request, res: Response) => {
       }
 
       // Get the full user data from database
-      const user = await storage.getUserByEmail(supabaseUser.email);
+      const user = await getSupabaseUserData(supabaseUser);
       if (!user) {
         return res.status(401).json({ error: "User not found in database" });
       }
