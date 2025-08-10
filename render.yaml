@@ -5,8 +5,8 @@ services:
     name: sandwich-project-api
     runtime: node
     repo: https://github.com/nicunursekatie/sandwichprojectplatform
-    buildCommand: npm install && npm run build:server
-    startCommand: npm run start:server
+    buildCommand: npm install && npm run build
+    startCommand: npm run serve
     envVars:
       - key: NODE_ENV
         value: production
