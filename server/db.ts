@@ -19,17 +19,20 @@ let poolConfig: any = {
   connectionTimeoutMillis: 2000
 };
 
-// Force SSL configuration for production/Render/Supabase
-if (process.env.NODE_ENV === 'production' || 
-    process.env.RENDER || 
-    connectionString?.includes('supabase') ||
-    connectionString?.includes('pooler') ||
-    connectionString?.includes('aws') ||
-    connectionString?.includes('ssl')) {
+// Always use SSL with Supabase in production
+if (connectionString?.includes('supabase')) {
+  poolConfig.ssl = {
+    rejectUnauthorized: false,
+    // Additional SSL options for better compatibility
+    require: true,
+    requestCert: false
+  };
+  console.log("Database: SSL enabled for Supabase with rejectUnauthorized: false");
+} else if (process.env.NODE_ENV === 'production' || process.env.RENDER) {
   poolConfig.ssl = {
     rejectUnauthorized: false
   };
-  console.log("Database: SSL enabled with rejectUnauthorized: false");
+  console.log("Database: SSL enabled for production");
 } else {
   poolConfig.ssl = false;
   console.log("Database: SSL disabled (development mode)");
