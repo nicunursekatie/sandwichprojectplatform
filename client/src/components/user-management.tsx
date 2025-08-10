@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from '@/contexts/AuthContext';
+import { useUser } from '@/hooks/useUser';
 import { useToast } from "@/hooks/use-toast";
 import { useCelebration, CelebrationToast } from "@/components/celebration-toast";
 import { hasPermission, USER_ROLES, PERMISSIONS, getDefaultPermissionsForRole, getRoleDisplayName } from "@shared/auth-utils";
@@ -34,7 +35,7 @@ interface User {
 }
 
 export default function UserManagement() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isLoading: userLoading } = useUser();
   const { toast } = useToast();
   const { celebration, triggerCelebration, hideCelebration } = useCelebration();
   const [activeTab, setActiveTab] = useState<"users" | "activity" | "announcements" | "shoutouts" | "auth-debug">("users");
@@ -42,8 +43,19 @@ export default function UserManagement() {
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState<string>("");
 
+  // Show loading state while fetching user
+  if (userLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Loading...</CardTitle>
+        </CardHeader>
+      </Card>
+    );
+  }
+
   // Check if current user can manage users
-  if (!hasPermission(currentUser, PERMISSIONS.MANAGE_USERS)) {
+  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.MANAGE_USERS)) {
     return (
       <Card>
         <CardHeader>

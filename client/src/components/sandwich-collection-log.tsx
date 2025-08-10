@@ -200,6 +200,7 @@ export default function SandwichCollectionLog() {
         const data = await response.json();
         
         let filteredCollections = data.collections || [];
+        console.log('Raw API response:', allCollections);
         console.log('Initial collections count:', filteredCollections.length);
         
         // Apply filters using debounced values
