@@ -626,8 +626,77 @@ export function setupTempAuth(app: Express) {
     }
   });
 
-  // DISABLED: Using Supabase auth for /api/auth/user instead
-  // The Supabase version is registered in routes/auth.ts
+  // Bridge to Supabase auth - forward to the Supabase auth handler
+  app.get("/api/auth/user", async (req: any, res, next) => {
+    // Check if there's a Bearer token (Supabase auth)
+    if (req.headers.authorization?.startsWith('Bearer ')) {
+      // Import and use the Supabase auth middleware
+      const { verifySupabaseToken } = await import('./middleware/supabase-auth');
+      
+      // Use the Supabase auth middleware
+      return verifySupabaseToken(req, res, async () => {
+        if (!req.user) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+        
+        try {
+          // Get the full user data from local database using email
+          const dbUser = await storage.getUserByEmail(req.user.email);
+          
+          if (!dbUser) {
+            console.error(`User ${req.user.email} not found in local database`);
+            return res.status(404).json({ message: "User not found in database" });
+          }
+          
+          if (!dbUser.isActive) {
+            return res.status(403).json({ message: "User account is inactive" });
+          }
+
+          // Return the full user data with permissions from local database
+          res.json({
+            id: dbUser.id,
+            email: dbUser.email,
+            firstName: dbUser.firstName || "",
+            lastName: dbUser.lastName || "",
+            displayName: dbUser.displayName || `${dbUser.firstName} ${dbUser.lastName}`.trim(),
+            profileImageUrl: dbUser.profileImageUrl,
+            role: dbUser.role,
+            permissions: dbUser.permissions || []
+          });
+        } catch (error) {
+          console.error('Error in /api/auth/user endpoint:', error);
+          res.status(500).json({ message: "Internal server error" });
+        }
+      });
+    }
+    
+    // Fall back to session auth if no Bearer token
+    if (req.session?.user) {
+      try {
+        const dbUser = await storage.getUserByEmail(req.session.user.email);
+        if (!dbUser || !dbUser.isActive) {
+          return res.status(401).json({ message: "User account not found or inactive" });
+        }
+        
+        res.json({
+          id: dbUser.id,
+          email: dbUser.email,
+          firstName: dbUser.firstName,
+          lastName: dbUser.lastName,
+          displayName: dbUser.displayName,
+          profileImageUrl: dbUser.profileImageUrl,
+          role: dbUser.role,
+          permissions: dbUser.permissions,
+          isActive: dbUser.isActive
+        });
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        res.status(500).json({ message: "Error fetching user data" });
+      }
+    } else {
+      res.status(401).json({ message: "Unauthorized" });
+    }
+  });
 
   // Logout endpoint
   app.post("/api/logout", (req: any, res) => {
