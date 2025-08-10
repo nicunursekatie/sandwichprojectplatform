@@ -53,6 +53,22 @@ export async function getSupabaseUserData(supabaseUser: any): Promise<SupabaseUs
       };
     }
 
+    // Log the raw data for debugging
+    console.log('Raw userData from Supabase:', userData);
+    console.log('Permissions type:', typeof userData.permissions);
+    console.log('Permissions value:', userData.permissions);
+    
+    // Parse permissions - Supabase returns PostgreSQL arrays as arrays already
+    let permissions = userData.permissions || [];
+    
+    // Ensure permissions is an array
+    if (!Array.isArray(permissions)) {
+      console.warn('Permissions not an array, using role defaults');
+      permissions = getDefaultPermissionsForRole(userData.role || 'viewer');
+    }
+    
+    console.log(`User ${userData.email} has ${permissions.length} permissions:`, permissions.slice(0, 5), '...');
+    
     // Return user data from Supabase view
     return {
       id: userData.id,
@@ -63,7 +79,7 @@ export async function getSupabaseUserData(supabaseUser: any): Promise<SupabaseUs
                    `${supabaseUser.user_metadata?.firstName || ''} ${supabaseUser.user_metadata?.lastName || ''}`.trim() ||
                    userData.email?.split('@')[0] || '',
       role: userData.role || 'viewer',
-      permissions: userData.permissions || getDefaultPermissionsForRole(userData.role || 'viewer'),
+      permissions: permissions,
       isActive: true
     };
   } catch (error) {

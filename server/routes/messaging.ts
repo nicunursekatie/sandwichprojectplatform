@@ -227,10 +227,14 @@ router.get("/unread", async (req, res) => {
     res.json({ messages });
   } catch (error) {
     console.error("Error getting unread messages:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : 'No stack');
     if (error instanceof Error && (error.message.includes("not authenticated") || error.message.includes("not found in database"))) {
       return res.status(401).json({ error: error.message });
     }
-    res.status(500).json({ error: "Failed to get unread messages" });
+    res.status(500).json({ 
+      error: "Failed to get unread messages",
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
