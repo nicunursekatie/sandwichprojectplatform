@@ -73,6 +73,31 @@ export async function getSupabaseUserData(supabaseUser: any): Promise<SupabaseUs
 }
 
 /**
+ * Get user data by email from Supabase
+ * This is for looking up other users, not for authentication
+ */
+export async function getSupabaseUserDataByEmail(email: string): Promise<SupabaseUserData | null> {
+  try {
+    const { data, error } = await supabase.auth.admin.listUsers();
+    
+    if (error) {
+      console.error('Error listing users:', error);
+      return null;
+    }
+
+    const supabaseUser = data.users.find(user => user.email === email);
+    if (!supabaseUser) {
+      return null;
+    }
+
+    return getSupabaseUserData(supabaseUser);
+  } catch (error) {
+    console.error('Error getting user by email:', error);
+    return null;
+  }
+}
+
+/**
  * Check if a user exists in Supabase by email
  */
 export async function checkSupabaseUserByEmail(email: string): Promise<boolean> {

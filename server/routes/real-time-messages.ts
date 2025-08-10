@@ -2,6 +2,7 @@ import express from "express";
 import { z } from "zod";
 import { storage } from "../storage-wrapper";
 import { verifySupabaseToken } from '../middleware/supabase-auth';
+import { getSupabaseUserData, getSupabaseUserDataByEmail } from '../utils/supabase-user-helper';
 
 // Use the existing authentication middleware
 const requireAuth = verifySupabaseToken;
@@ -44,7 +45,7 @@ router.get("/", requireAuth, async (req, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ error: "User not found in database" });
     }
@@ -82,7 +83,7 @@ router.get("/", requireAuth, async (req, res) => {
                 } catch (error) {
                   // If lookup by ID fails, try lookup by email
                   try {
-                    recipientUser = await storage.getUserByEmail(msg.contextId);
+                    recipientUser = await getSupabaseUserDataByEmail(msg.contextId);
                     console.log(`Successfully found user by email ${msg.contextId}:`, recipientUser?.firstName, recipientUser?.lastName);
                   } catch (emailError) {
                     console.error('Error looking up recipient by email:', emailError);
@@ -182,7 +183,7 @@ router.post("/", requireAuth, async (req, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ error: "User not found in database" });
     }
@@ -245,7 +246,7 @@ router.post("/:id/read", requireAuth, async (req, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ error: "User not found in database" });
     }
@@ -276,7 +277,7 @@ router.post("/:id/star", requireAuth, async (req, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ error: "User not found in database" });
     }
@@ -301,7 +302,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ error: "User not found in database" });
     }

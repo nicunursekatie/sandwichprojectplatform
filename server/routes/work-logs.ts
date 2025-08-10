@@ -4,18 +4,18 @@ import { sql, eq } from "drizzle-orm";
 import { workLogs } from "@shared/schema";
 import { db } from "../db";
 import { verifySupabaseToken } from '../middleware/supabase-auth';
-import { storage } from '../storage-wrapper';
+import { getSupabaseUserData } from '../utils/supabase-user-helper';
 
 const router = Router();
 
 // Helper function to get user data from Supabase user
 const getUserFromSupabase = async (req: any) => {
   const supabaseUser = req.user;
-  if (!supabaseUser || !supabaseUser.email) {
+  if (!supabaseUser) {
     throw new Error("User not authenticated");
   }
 
-  const user = await storage.getUserByEmail(supabaseUser.email);
+  const user = await getSupabaseUserData(supabaseUser);
   if (!user) {
     throw new Error("User not found in database");
   }

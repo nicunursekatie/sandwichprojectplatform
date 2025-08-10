@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { verifySupabaseToken, optionalSupabaseAuth } from '../middleware/supabase-auth';
 import { IStorage } from '../storage.ts';
 import { storage } from '../storage-wrapper';
+import { getSupabaseUserData } from '../utils/supabase-user-helper';
 import { sql, eq, and, desc, asc, count } from 'drizzle-orm';
 
 export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
@@ -397,8 +398,8 @@ export function createEnhancedUserActivityRoutes(storage: IStorage): Router {
       let user = null;
       
       // If authenticated, get the full user data from database
-      if (supabaseUser?.email) {
-        user = await storage.getUserByEmail(supabaseUser.email);
+      if (supabaseUser) {
+        user = await getSupabaseUserData(supabaseUser);
       }
 
       const {

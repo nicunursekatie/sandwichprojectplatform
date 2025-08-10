@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { emailService } from '../services/email-service';
 import { verifySupabaseToken } from '../middleware/supabase-auth';
-import { storage } from '../storage-wrapper';
+import { getSupabaseUserData } from '../utils/supabase-user-helper';
 
 const router = Router();
 
@@ -15,7 +15,7 @@ router.get('/', verifySupabaseToken, async (req: any, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ message: 'User not found in database' });
     }
@@ -67,7 +67,7 @@ router.post('/', verifySupabaseToken, async (req: any, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ message: 'User not found in database' });
     }
@@ -117,7 +117,7 @@ router.patch('/:id', verifySupabaseToken, async (req: any, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ message: 'User not found in database' });
     }
@@ -150,7 +150,7 @@ router.delete('/:id', verifySupabaseToken, async (req: any, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ message: 'User not found in database' });
     }
@@ -181,7 +181,7 @@ router.get('/unread-count', verifySupabaseToken, async (req: any, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ message: 'User not found in database' });
     }
@@ -204,7 +204,7 @@ router.get('/search', verifySupabaseToken, async (req: any, res) => {
     }
 
     // Get the full user data from database
-    const user = await storage.getUserByEmail(supabaseUser.email);
+    const user = await getSupabaseUserData(supabaseUser);
     if (!user) {
       return res.status(401).json({ message: 'User not found in database' });
     }
