@@ -13,9 +13,6 @@
     "check": "tsc",
     "db:push": "drizzle-kit push",
     "migrate-users": "tsx scripts/migrate-users-to-supabase.ts",
-    "deploy:gh-pages": "npm run build:client && gh-pages -d dist",
-    "predeploy": "npm run build:client",
-    "deploy": "gh-pages -d dist/public",
     "copy-assets": "mkdir -p client/src/assets/LOGOS && cp attached_assets/LOGOS/*.png client/src/assets/LOGOS/ && cp attached_assets/*.png client/src/assets/"
   },
   "dependencies": {

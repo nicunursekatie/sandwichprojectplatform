@@ -1,13 +1,14 @@
 // API Configuration for production/development
 const isDevelopment = import.meta.env.DEV;
 
+// For production on Render, frontend and backend share the same domain
 export const API_BASE_URL = isDevelopment 
   ? 'http://localhost:5001' 
-  : (import.meta.env.VITE_API_URL || 'https://sandwich-project-api.onrender.com');
+  : (import.meta.env.VITE_API_URL || window.location.origin);
 
 export const WS_BASE_URL = isDevelopment
   ? 'ws://localhost:5001'
-  : API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+  : window.location.origin.replace('https://', 'wss://').replace('http://', 'ws://');
 
 export const getApiUrl = (path: string) => {
   // Remove leading slash if present
