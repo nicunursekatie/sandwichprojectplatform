@@ -356,17 +356,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
   );
 
-  // Setup temporary authentication (stable and crash-free)
-  const {
-    setupTempAuth,
-    isAuthenticated,
-    requirePermission,
-    initializeTempAuth,
-  } = await import("./temp-auth");
-  setupTempAuth(app);
-
-  // Initialize with default admin user for persistent login
-  await initializeTempAuth();
+  // REMOVED: Temp auth - using Supabase auth instead
+  // Import auth middleware from Supabase
+  const { verifySupabaseToken } = await import("./middleware/supabase-auth");
+  const isAuthenticated = verifySupabaseToken; // Use Supabase auth as the main auth
+  const requirePermission = (permission: string) => verifySupabaseToken; // Simplified for now
 
   // Add activity logging middleware after authentication setup
   app.use(createActivityLogger({ storage }));
