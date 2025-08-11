@@ -43,37 +43,12 @@ export default function UserManagement() {
   const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
   const [newPassword, setNewPassword] = useState<string>("");
 
-  // Show loading state while fetching user
-  if (userLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Loading...</CardTitle>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  // Check if current user can manage users
-  if (!currentUser || !hasPermission(currentUser, PERMISSIONS.MANAGE_USERS)) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Shield className="h-5 w-5" />
-            Access Denied
-          </CardTitle>
-          <CardDescription>
-            You don't have permission to manage users.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
+  // Call ALL hooks before any conditional returns
+  const hasAccess = currentUser && hasPermission(currentUser, PERMISSIONS.MANAGE_USERS);
+  
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    enabled: hasPermission(currentUser, PERMISSIONS.MANAGE_USERS),
+    enabled: hasAccess,
   });
 
   const updateUserMutation = useMutation({
@@ -160,6 +135,33 @@ export default function UserManagement() {
       });
     },
   });
+
+  // All hooks have been called, now we can do conditional returns
+  if (userLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Loading...</CardTitle>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  if (!currentUser || !hasAccess) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="h-5 w-5" />
+            Access Denied
+          </CardTitle>
+          <CardDescription>
+            You don't have permission to manage users.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
 
   const handleEditUser = (user: User) => {
     setSelectedUser(user);
