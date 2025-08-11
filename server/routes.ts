@@ -502,8 +502,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // User management routes
   app.get(
     "/api/users",
-    isAuthenticated,
-    requirePermission("view_users"),
+    verifySupabaseToken,
+    requirePermission("manage_users"),
     async (req, res) => {
       try {
         const users = await storage.getAllUsers();
@@ -517,7 +517,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch(
     "/api/users/:id",
-    isAuthenticated,
+    verifySupabaseToken,
     requirePermission("manage_users"),
     async (req, res) => {
       try {
@@ -534,7 +534,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch(
     "/api/users/:id/status",
-    isAuthenticated,
+    verifySupabaseToken,
     requirePermission("manage_users"),
     async (req, res) => {
       try {
@@ -1138,7 +1138,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
     } catch (error) {
-      res.status(500).json({ message: "Failed to fetch sandwich collections" });
+      console.error('Error fetching sandwich collections:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch sandwich collections",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
