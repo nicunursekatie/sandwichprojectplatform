@@ -24,6 +24,7 @@ import shoutoutRoutes from "./routes/shoutouts";
 import { createUserActivityRoutes } from "./routes/user-activity";
 import { createEnhancedUserActivityRoutes } from "./routes/enhanced-user-activity";
 import { authRoutes } from "./routes/auth";
+import { testDbRoutes } from "./routes/test-db";
 import { verifySupabaseToken, optionalSupabaseAuth } from "./middleware/supabase-auth";
 
 // import { generalRateLimit, strictRateLimit, uploadRateLimit, clearRateLimit } from "./middleware/rateLimiter";
@@ -481,6 +482,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Register Supabase auth routes
   app.use("/api", authRoutes);
+  
+  // Test route for debugging
+  app.use("/api", testDbRoutes);
 
   // Import and use the new modular routes
   const routesModule = await import("./routes/index");

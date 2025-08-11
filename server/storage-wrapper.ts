@@ -15,9 +15,10 @@ class StorageWrapper implements IStorage {
     try {
       // Use database storage as primary for persistence across deployments
       this.primaryStorage = new DatabaseStorage();
-      console.log('Database storage initialized');
+      console.log('Database storage initialized successfully');
     } catch (error) {
-      console.log('Failed to initialize database storage, using memory storage');
+      console.error('Failed to initialize database storage:', error);
+      console.log('Falling back to memory storage');
       this.primaryStorage = this.fallbackStorage;
     }
   }
@@ -75,8 +76,14 @@ class StorageWrapper implements IStorage {
       }
       return result;
     } catch (error) {
-      console.warn('Primary storage operation failed, using fallback:', error);
-      return fallbackOperation();
+      console.error('Primary storage operation failed:', error);
+      console.log('Attempting fallback operation...');
+      try {
+        return await fallbackOperation();
+      } catch (fallbackError) {
+        console.error('Fallback operation also failed:', fallbackError);
+        throw fallbackError;
+      }
     }
   }
 
