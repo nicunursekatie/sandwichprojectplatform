@@ -44,7 +44,7 @@ export default function UserManagement() {
   const [newPassword, setNewPassword] = useState<string>("");
 
   // Call ALL hooks before any conditional returns
-  const hasAccess = currentUser && hasPermission(currentUser, PERMISSIONS.MANAGE_USERS);
+  const hasAccess = Boolean(currentUser && hasPermission(currentUser, PERMISSIONS.MANAGE_USERS));
   
   const { data: users = [], isLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
